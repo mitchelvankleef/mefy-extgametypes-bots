@@ -35,7 +35,7 @@ setcvar "g_scoreboardpic" "mohdm2"
 			waitthread setup_bases
 			thread global/libmef/ctf.scr::ctf_begin
 			break
-		
+
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
@@ -61,6 +61,7 @@ setcvar "g_scoreboardpic" "mohdm2"
 	exec global/ambient.scr mohdm2
 	
 	level waittill spawn
+	$world farclipoverride -1
 
 	//add in our kill brush under the cheat point.
 	local.killbrush = spawn trigger_hurt

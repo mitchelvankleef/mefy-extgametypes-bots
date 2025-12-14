@@ -77,6 +77,7 @@ main:
 	exec global/ambient.scr obj_team1
 
 	level waittill spawn
+	$world farclipoverride -1
 end
 
 
@@ -151,7 +152,6 @@ objectivethread:
 	level.defusing_team = "axis"
 	level.planting_team = "allies"
 	level.targets_to_destroy = 1
-	level.targets_destroyed = 0
 
 	// set the parameters for this round based match
 	if (level.mef_gametype != "ftobj")

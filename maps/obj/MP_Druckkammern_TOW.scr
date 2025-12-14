@@ -1,0 +1,1119 @@
+// MP_Druckkammern_TOW
+// Note: For objective function calls TakeOver and SetCurrent the
+// teams are as such:
+// 0 = Axis
+// 1 = Allies
+// 2 = Neutral
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.1 (08-15-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+//----------------------------------------------------------
+// Main
+//----------------------------------------------------------
+main:
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Druckkammern" 
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_druckkammern_tow" 
+
+	level.mef_mapname = "mp_druckkammern_tow"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"tow"::"ft"::"ctf"::"ftctf"::"fttow"
+	level.mef_defaultgametype = "fttow"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "1101.21 -3615.13 -511.88 -90 SE Crane-yard" "3919.13 -2109.16 -479.88 0 NW Generator Room"
+			waitthread global/libmef/bases.scr::addbasepair "368.87 -3453.96 -511.88 180 SE Storage Room" "3359.13 -698.16 -511.88 0 NW Dock Area"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+
+		case "tow":
+			thread towthread
+			break
+
+		case "fttow":
+			thread global/libmef/ft.scr::ft_begin
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_Druckkammern_TOW.scr"
+	level.music="MP_Druckkammern_TOW"
+
+	//Farplane Color and Distance ((Don't move or Weather.SCR will over-write.))
+	$world farplane 4000
+	//$world farplane_cull 2
+	//$world farplane_bias -1024
+
+	exec global/ambient.scr
+	exec global/weather.scr
+	exec global/door_locked.scr::lock
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//remove all ai
+		$enemyspawner remove
+
+		//This will remove the bombs so that we can play in other modes...
+		$boat_bomb remove
+		$fuel_depot_bomb remove
+	}
+
+	level waittill prespawn
+
+	level waittill spawn
+
+	//Hide the bodies!
+	$bodies1 hide
+	$bodies2 hide
+	$bodies3 hide
+	$bodies4 hide
+	
+	//init the sub
+	thread init_sub
+
+	if (!level.mef_devmode && level.roundbased)
+	{
+		level waittill roundstart
+	}
+
+	thread start_generator_sound
+end
+
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end
+
+
+towthread:
+	//Exec our helper scripts
+	exec global/tow_dm.scr
+	exec global/dm_ai.scr	
+	exec global/friendly.scr
+
+	setcvar "g_obj_alliedtext1" "Protect the Transport"
+	setcvar "g_obj_alliedtext2" "Disengage U-Boat Clamps"
+	setcvar "g_obj_alliedtext3" "Open Pen Doors"
+	setcvar "g_obj_alliedtext4" "Steal U-Boat"
+	setcvar "g_obj_alliedtext5" "Detonate German Entrance"
+
+	setcvar "g_obj_axistext1" "Protect Entrance"
+	setcvar "g_obj_axistext2" "Close Pen Doors"
+	setcvar "g_obj_axistext3" "Engage U-Boat Clamps"
+	setcvar "g_obj_axistext4" "Prevent U-Boat Theft"
+	setcvar "g_obj_axistext5" "Destroy Allied Transport"
+
+	
+	//////////////////////////
+	level waittill prespawn
+	//////////////////////////
+
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_allied_spawner 1 5 1
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_axis_spawner 5 1 5
+
+	//////////////////////////
+	level waittill spawn
+	//////////////////////////
+	
+	
+	//Globals
+	level.bClampsSwitchDown			= 0
+	level.bDoorsSwitchDown			= 0
+	level.clampsEngaged				= 1
+	level.bRoundStarted				= 0
+	level.bClampsMoving				= 0
+
+	// set the parameters for this round based match
+//	level.dmrespawning			= 1			// 1 or 0
+	level.dmroundlimit			= 15		// round time limit in minutes
+	level.clockside				= axis		// set to axis, allies, kills, or draw
+	level.numObjectives			= 5			// Number of objectives needed to win
+
+	//////////////////////////
+	if (!level.mef_devmode)
+	{
+		level waittill roundstart
+	}
+	//////////////////////////	
+
+	//init the switch handles
+	thread init_objective_switch_handles
+
+	//Init the spawner bombs
+	thread init_spawner_bombs
+
+	//Init the sub clamps
+	thread init_sub_clamps
+
+	//Setup the starting team objectives
+	thread set_objectives
+
+	level.bRoundStarted = 1
+end
+
+
+
+//----------------------------------------------------------
+//Sound for Generators 
+//----------------------------------------------------------
+start_generator_sound:
+
+	$gen_sound_speaker loopsound power_generator
+
+end
+
+//----------------------------------------------------------
+//Destroy the allied spawner here
+//----------------------------------------------------------
+destroy_allied_spawner local.planter:
+
+	//Make sure we are the allies	
+	iprintln "The Allied Transport has been destroyed!"
+
+	//Take over the objective
+	$obj_allied_spawner TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+	
+	iprintln "The Allied Team can no longer respawn!"
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Destroy the axis spawner here
+//----------------------------------------------------------
+destroy_axis_spawner local.planter:
+
+	iprintln "The Axis Entrance has been destroyed!"
+
+	$obj_axis_spawner TakeOver 1	
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	//blow up stuff
+	$hose_explo_1 thread Do_Fuel_Tank_Explosion
+
+	wait 2
+
+	$fuel_explo_1 thread Do_Fuel_Tank_Explosion
+
+	wait 1
+
+	$fuel_explo_2 thread Do_Fuel_Tank_Explosion
+
+	wait .5
+
+	$fuel_explo_3 thread Do_Fuel_Tank_Explosion
+
+	iprintln "The Axis Team can no longer respawn!"
+		
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Open/close the sub pen doors here
+//----------------------------------------------------------
+toggle_subpen_doors:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $obj_subpen_doors.ControlledBy != 0 && $obj_steal_sub.ControlledBy != 1 )
+			{	
+				//Flip the switch
+				thread sub_doors_switch
+
+				//Take over the objective
+				$obj_subpen_doors TakeOver 0			
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				//Close the pen doors
+				$subpen_doors close $door_entity
+				$subpen_doors playsound subpen_doors_close
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+				
+				iprintln "The Axis have closed the Pen Doors!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $obj_subpen_doors.ControlledBy != 1 )
+			{	
+				//Flip the switch
+				thread sub_doors_switch
+
+				//Take over the objective
+				$obj_subpen_doors TakeOver 1
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Open the doors
+				$subpen_doors open $door_entity				
+				$subpen_doors playsound subpen_doors_open
+				
+				//Give 2 points for taking objective
+				parm.other AddKills 2 
+				
+				iprintln "The Allies have opened the Pen Doors!"
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Open/close the sub clamps
+//----------------------------------------------------------
+toggle_sub_clamps:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if( (level.bRoundStarted == 1) && (level.bClampsMoving == 0) )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $obj_sub_clamps.ControlledBy != 0 )
+			{
+				level.bClampsMoving = 1			// set semaphore
+				
+				//Take the objective
+				$obj_sub_clamps TakeOver 0				
+				waitthread global/libmef/tow.scr::objective_captured axis
+				iprintln "The Axis have engaged the Sub Clamps!"
+
+				//Update team current objectives
+				thread set_objectives
+
+				//Flip the switch
+				thread sub_clamps_switch
+
+				//engage the clamps
+				waitthread engage_sub_clamps
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				level.bClampsMoving = 0			// clear semaphore
+				waitthread Check_End_Match
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $obj_sub_clamps.ControlledBy != 1 )
+			{
+				level.bClampsMoving = 1			// set semaphore
+				
+				//Take the objective
+				$obj_sub_clamps TakeOver 1				
+				waitthread global/libmef/tow.scr::objective_captured allies
+				iprintln "The Allies have disengaged the Sub Clamps!"
+
+				//Update team current objectives
+				thread set_objectives
+
+				//Flip the switch
+				thread sub_clamps_switch 
+
+				//disengage the clamps
+				waitthread disengage_sub_clamps
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2 
+
+				level.bClampsMoving = 0			// clear semaphore
+				waitthread Check_End_Match
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//steal the sub
+//----------------------------------------------------------
+steal_sub:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if( level.bRoundStarted == 1 )
+	{
+		//Only the allies can actually take this objective
+		if( parm.other.dmteam != axis && $obj_steal_sub.ControlledBy != 1 )
+		{	
+			if( $obj_sub_clamps.ControlledBy == 1 && $obj_subpen_doors.ControlledBy == 1 )			
+			{
+				local.winstate = int( getcvar( g_TOW_winstate ) )
+				if( local.winstate == 0 )
+				{
+					//Give 2 points for taking objective
+					parm.other AddKills 2 
+					
+					drawhud 0
+					level.mef_hidehud = 1
+					
+					setcvar "g_TOW_winstate" "2"
+					//Flip the switch
+					thread start_sub_switch
+					
+					$obj_steal_sub TakeOver 1
+				
+					$player nodamage
+					$player hide
+					$player notsolid
+					$player safeholster 1
+					freezeplayer
+
+					//ignore the clock for the movies
+					level ignoreclock 1
+					level.mef_gameover = 1
+
+					//if there is a bomb ticking stop it.
+					waitthread global/libmef/bomb.scr::StopBomb
+
+					// FIX BEFORE RELEASE: delete the following comment before release
+					// added by JP to so vote can be held to end the oppression of the cinematic
+					// See why we need to delete that? :-), what are you doing reading this anyway
+					level.cinematic = getcvar(g_cinematics_off)
+	
+					if(level.cinematic == "1")
+					{
+						$player nodamage
+						$player hide
+						$player notsolid
+						$player safeholster 1
+						freezeplayer
+						waitthread global/libmef/util.scr::do_teamwin allies
+						end
+					}
+
+					//if the axis managed to hit the close doors switch after the 
+					$subpen_doors open $door_entity
+
+					thread sub_exit
+					wait 25
+					
+					iprintln "The Allies have stolen the U-Boat!"	
+
+					waitthread global/libmef/util.scr::do_teamwin allies
+				}
+			}
+			/*
+			else if( $obj_sub_clamps.ControlledBy == 0 && $obj_subpen_doors.ControlledBy == 0 )
+			{
+				//Clamps locked doors closed
+				parm.other iprint "Pen Doors and Submarine Clamps must be disengaged before launching"			
+			}
+			else if( $obj_sub_clamps.ControlledBy == 0 && $obj_subpen_doors.ControlledBy == 1 )
+			{	
+				//Clamps locked Doors open
+				parm.other iprint "Submarine Clamps must be disengaged before launching"			
+			}
+			else if( $obj_sub_clamps.ControlledBy == 1 && $obj_subpen_doors.ControlledBy == 0 )
+			{
+				//Clamps open doors locked
+				parm.other iprint "Pen Doors must be opened before launching"
+			}
+			*/
+
+		}
+		
+
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:
+	
+	//First lets do the allies
+	if( $obj_sub_clamps.ControlledBy == 0 )
+	{	
+		$obj_sub_clamps SetCurrent 1
+	}
+	else if( $obj_subpen_doors.ControlledBy == 0 )
+	{	
+		$obj_subpen_doors SetCurrent 1
+	}	
+	else if( $obj_steal_sub.ControlledBy == 0 )
+	{	
+		$obj_steal_sub SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $obj_subpen_doors.ControlledBy == 1 )
+	{	
+		$obj_subpen_doors SetCurrent 0
+	}
+	else if( $obj_sub_clamps.ControlledBy == 1 )
+	{	
+		$obj_sub_clamps SetCurrent 0
+	}
+	else
+	{	
+		$obj_allied_spawner SetCurrent 0
+	}
+
+end
+
+
+//--------------------------------------------------------------
+//Move the clamps handle
+//--------------------------------------------------------------
+sub_clamps_switch:	
+	
+	if( level.bClampsSwitchDown == 0 )
+	{
+		$clamp_handle_origin speed 1.0
+		$clamp_handle_origin rotatexdownto -90
+		$clamp_handle_origin waitmove
+		$clamp_handle_origin playsound switchbox 
+		level.bClampsSwitchDown = 1
+	}
+	else
+	{
+		$clamp_handle_origin rotatexupto 0
+		$clamp_handle_origin waitmove
+		level.bClampsSwitchDown = 0
+	}
+
+end
+
+
+//--------------------------------------------------------------
+//Move the doors handle
+//--------------------------------------------------------------
+sub_doors_switch:		
+	
+	if( level.bDoorsSwitchDown == 0 )
+	{
+		$subpen_doors_handle_origin speed 1.0
+		$subpen_doors_handle_origin rotatezdownto 90
+		$subpen_doors_handle_origin waitmove
+		$subpen_doors_handle_origin playsound switchbox 
+		level.bDoorsSwitchDown = 1
+	}
+	else
+	{
+		$subpen_doors_handle_origin rotatezupto 0
+		$subpen_doors_handle_origin waitmove
+		level.bDoorsSwitchDown = 0
+	}	
+
+end
+
+//--------------------------------------------------------------
+//Start the sub switch
+//--------------------------------------------------------------
+start_sub_switch:
+	
+	$sub_controls_handle_origin speed 1.0
+	$sub_controls_handle_origin rotatezdownto 90
+	$sub_controls_handle_origin waitmove
+	$sub_controls_handle_origin playsound switchbox
+
+end
+
+
+//--------------------------------------------------------------
+//Init the objective switch handles
+//--------------------------------------------------------------
+init_objective_switch_handles:
+	
+	$clamp_handle bind $clamp_handle_origin
+	$subpen_door_handle bind $subpen_doors_handle_origin
+
+	$clamp_handle_origin notsolid
+	$subpen_doors_handle_origin notsolid
+	$clamp_handle notsolid
+	$subpen_door_handle notsolid
+end
+
+//--------------------------------------------------------------
+//Lets get the sub outta dodge
+//--------------------------------------------------------------
+sub_exit:	
+	
+	drawhud 0
+	level.mef_hidehud = 1
+
+	//remove the sub clamps
+	$sub_clamps_1R remove
+	$sub_clamps_2R remove
+	$sub_clamps_3R remove
+	$sub_clamps_4R remove
+
+	$sub_clamps_1L remove
+	$sub_clamps_2L remove
+	$sub_clamps_3L remove
+	$sub_clamps_4L remove
+
+	//remove the ramps
+	$ramp1 remove
+	$ramp2 remove
+	$ramp3 remove
+	
+	forcemusic aux2 aux2
+
+	//Stop the sub idle sound
+	//$lowerhull stoploopsound
+	//wait 1
+	//$lowerhull loopsound sub_moving
+
+	//Start the sub rolling
+	$lowerhull followpath $sub_path normalangles 	
+	
+	//setup our camera		
+	$watch_camera fov 80 2
+	$watch_camera speed .5								
+	$watch_camera follow $camera_path $lowerhull
+	
+	wait 2
+
+	//Cue the movie baby!
+	cuecamera $watch_camera
+	
+	$lowerhull move
+	//$lowerhull stoploopsound
+
+end
+
+
+
+
+//--------------------------------------------------------------
+//init the sub
+//--------------------------------------------------------------
+init_sub:
+
+	//bind the sub objects together	
+	$upperhull angles "0 90 0"
+
+	$upperhull bind $lowerhull
+	$sub_col bind $lowerhull
+
+	$sub_controls_handle bind sub_controls_handle_origin	
+	//$sub_controls_handle_origin bind $sub_controls
+	$sub_controls bind $lowerhull
+	//Added by Vex
+	$lowerhull loopsound sub_idle
+
+end
+
+
+
+//-----------------------------------------------
+// Init the spawner bombs
+//-----------------------------------------------
+init_spawner_bombs:
+	
+	//Allied spawner bomb
+	$boat_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_Druckkammern_TOW.scr::destroy_allied_spawner
+	$fuel_depot_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_Druckkammern_TOW.scr::destroy_axis_spawner
+
+end
+
+//-----------------------------------------------
+// Init the sub clamps
+//-----------------------------------------------
+init_sub_clamps:
+	
+	$sub_clamps_1R bind	$sub_clamps_1R_origin
+	$sub_clamps_2R bind $sub_clamps_2R_origin
+	$sub_clamps_3R bind $sub_clamps_3R_origin
+	$sub_clamps_4R bind $sub_clamps_4R_origin
+
+	$sub_clamps_1L bind	$sub_clamps_1L_origin
+	$sub_clamps_2L bind	$sub_clamps_2L_origin
+	$sub_clamps_3L bind	$sub_clamps_3L_origin
+	$sub_clamps_4L bind	$sub_clamps_4L_origin
+
+end
+
+//-----------------------------------------------
+// disengage sub clamps
+//-----------------------------------------------
+disengage_sub_clamps:
+	
+	//Disengage the clamps
+	if( level.clampsEngaged == 1 )
+	{
+		//Clamp set 1
+		$sub_clamps_1L_origin speed 0.5
+		$sub_clamps_1L_origin rotatexdownto -45
+		$sub_clamps_1L_origin waitmove
+		$sub_clamps_1L_origin playsound subclamp_open
+
+		$sub_clamps_1R_origin speed 0.5
+		$sub_clamps_1R_origin rotatexdownto 45
+		$sub_clamps_1R_origin waitmove
+		$sub_clamps_1R_origin playsound subclamp_open
+
+		wait 2
+
+		//Clamp set 2
+		$sub_clamps_2L_origin speed 0.5
+		$sub_clamps_2L_origin rotatexdownto -45
+		$sub_clamps_2L_origin waitmove
+		$sub_clamps_2L_origin playsound subclamp_open 
+
+		$sub_clamps_2R_origin speed 0.5
+		$sub_clamps_2R_origin rotatexdownto 45
+		$sub_clamps_2R_origin waitmove
+		$sub_clamps_2R_origin playsound subclamp_open
+
+		wait 2
+
+		//Clamp set 3
+		$sub_clamps_3L_origin speed 0.5
+		$sub_clamps_3L_origin rotatexdownto -45
+		$sub_clamps_3L_origin waitmove
+		$sub_clamps_3L_origin playsound subclamp_open
+		
+		$sub_clamps_3R_origin speed 0.5
+		$sub_clamps_3R_origin rotatexdownto 45
+		$sub_clamps_3R_origin waitmove
+		$sub_clamps_3R_origin playsound subclamp_open																			
+		wait 2
+
+		//Clamp set 4
+		$sub_clamps_4L_origin speed 0.5
+		$sub_clamps_4L_origin rotatexdownto -45
+		$sub_clamps_4L_origin waitmove
+		$sub_clamps_4L_origin playsound subclamp_open
+
+		$sub_clamps_4R_origin speed 0.5
+		$sub_clamps_4R_origin rotatexdownto 45
+		$sub_clamps_4R_origin waitmove
+		$sub_clamps_4R_origin playsound subclamp_open
+
+		level.clampsEngaged = 0
+	}
+
+end
+
+
+//-----------------------------------------------
+// engage sub clamps
+//-----------------------------------------------
+engage_sub_clamps:
+
+	//Disengage the clamps
+	if( level.clampsEngaged == 0 )
+	{
+		//Clamp set 1
+		$sub_clamps_1L_origin speed 0.5
+		$sub_clamps_1L_origin rotatexdownto 0
+		$sub_clamps_1L_origin waitmove
+		$sub_clamps_1L_origin playsound subclamp_close 
+
+		$sub_clamps_1R_origin speed 0.5
+		$sub_clamps_1R_origin rotatexdownto 0
+		$sub_clamps_1R_origin waitmove
+		$sub_clamps_1R_origin playsound subclamp_close 
+
+		wait 2
+
+		//Clamp set 2
+		$sub_clamps_2L_origin speed 0.5
+		$sub_clamps_2L_origin rotatexdownto 0
+		$sub_clamps_2L_origin waitmove
+		$sub_clamps_2L_origin playsound subclamp_close
+
+		$sub_clamps_2R_origin speed 0.5
+		$sub_clamps_2R_origin rotatexdownto 0
+		$sub_clamps_2R_origin waitmove
+		$sub_clamps_2R_origin playsound subclamp_close 
+
+		wait 2
+
+		//Clamp set 3
+		$sub_clamps_3L_origin speed 0.5
+		$sub_clamps_3L_origin rotatexdownto 0
+		$sub_clamps_3L_origin waitmove
+		$sub_clamps_3L_origin playsound subclamp_close 
+
+		$sub_clamps_3R_origin speed 0.5								  
+		$sub_clamps_3R_origin rotatexdownto 0
+		$sub_clamps_3R_origin waitmove
+		$sub_clamps_3R_origin playsound subclamp_close 
+
+		wait 2
+
+		//Clamp set 4
+		$sub_clamps_4L_origin speed 0.5
+		$sub_clamps_4L_origin rotatexdownto 0
+		$sub_clamps_4L_origin waitmove
+		$sub_clamps_4L_origin playsound subclamp_close
+
+		$sub_clamps_4R_origin speed 0.5
+		$sub_clamps_4R_origin rotatexdownto 0
+		$sub_clamps_4R_origin waitmove
+		$sub_clamps_4R_origin playsound subclamp_close
+		level.clampsEngaged = 1
+	}
+end
+
+//-----------------------------------------------
+// See if someone won
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAxis		= 0
+	local.nAllied	= 0
+
+	//Allied Spawner
+	if( $obj_allied_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+
+	//Axis Spawner
+	if( $obj_axis_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+	
+	//Sub Doors
+	if( $obj_subpen_doors.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+	
+	//Sub Clamps
+	if( $obj_sub_clamps.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+
+	//Submarine
+	if( $obj_steal_sub.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	
+	//Allies win by stealing the sub which is already handled so we only need to see if the axis have taken all the objectives...
+	//Only show the movie if the wingame cvar has not been set yet.
+	local.winstate = int( getcvar( g_TOW_winstate ) )
+	if( local.winstate == 0 )
+	{
+		if( local.nAxis == level.numObjectives )
+		{
+			setcvar "g_TOW_winstate" "1"
+
+			//If the clock expires during the movie ignore it
+			level ignoreclock 1
+			level.mef_gameover = 1
+
+			//if there is a bomb ticking stop it.
+			waitthread global/libmef/bomb.scr::StopBomb
+
+			//Play the cinematic
+			thread AxisWon
+		}	
+	}
+
+end
+
+
+
+//-----------------------------------------------
+// Blow up 
+//-----------------------------------------------
+Do_Fuel_Tank_Explosion:
+	
+	if (self.exploder_set != NIL)
+	{
+		exec global/exploder.scr::explode self.exploder_set
+	}
+	
+	if (self.explosion_fx != NIL)
+	{
+		self thread spawn_fx self.explosion_fx
+	}
+	
+	if (self.explosion_sound != NIL)
+	{
+		self playsound self.explosion_sound
+	}
+
+	if (self.target != NIL && self.target != NULL && self.target != "")
+	{
+		self.target thread blow_up
+		
+		waitframe
+	}
+	
+	radiusdamage self.origin level.bomb_damage level.bomb_explosion_radius
+	
+	if (self.killarea != NIL)
+	{
+		self.killarea volumedamage 1000
+	}
+	
+	self hide
+
+	self.live = 0
+	
+	self.exploded = 1	
+
+end
+
+
+//-----------------------------------------------
+//Do some fx
+//-----------------------------------------------
+spawn_fx local.fx:
+
+	local.temp = spawn script_model model local.fx
+	local.temp.origin = self.origin
+	local.temp anim start
+	wait 5
+	local.temp remove
+
+end
+
+//-----------------------------------------------
+//Blow up a thing
+//-----------------------------------------------
+blow_up:
+
+	if ( self.destroyed_model != NIL )
+	{
+		local.damaged = self thread spawn_damaged self.destroyed_model
+	}
+	
+	if( self.target != NIL )
+	{
+		self.target thread blow_up
+	}
+	
+	self remove
+
+end
+
+//-----------------------------------------------
+//spawn a damaged model
+//-----------------------------------------------
+spawn_damaged local.model:
+
+	local.damaged = spawn script_model model local.model
+	local.damaged.origin = self.origin
+	local.damaged.angles = self.angles
+
+end local.damaged
+
+//-----------------------------------------------
+//Axis have won do their cinematic
+//-----------------------------------------------
+AxisWon:
+
+	drawhud 0
+	level.mef_hidehud = 1
+	
+	// FIX BEFORE RELEASE: delete the following comment before release
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	// See why we need to delete that? :-), what are you doing reading this anyway
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		$player nodamage
+		$player hide
+		$player notsolid
+		$player safeholster 1
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+	
+	//Standard hide player stuff
+	$player nodamage
+	$player hide
+	$player notsolid
+	$player safeholster 1
+	freezeplayer
+
+	level ignoreclock 1
+	level.mef_gameover = 1
+
+	//spawn the officers
+	waitthread global/dm_ai.scr::spawnset 2 officers	
+
+	//spawn the colonel
+	waitthread global/dm_ai.scr::spawnset 1 colonel	
+
+	$colonel thread Do_Axis_Colonel_End
+
+	//Tell the officers to do their ending sequence	
+	for( local.i = 1; local.i <= $officers.size; local.i++ )
+	{
+		$officers[local.i] thread Do_Axis_Officers_End
+	}
+
+end
+
+//-----------------------------------------------
+//Axis colonel handler
+//-----------------------------------------------
+Do_Axis_Colonel_End:
+	// FIX BEFORE RELEASE: delete the following comment before release
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	// See why we need to delete that? :-), what are you doing reading this anyway
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		$player nodamage
+		$player hide
+		$player notsolid
+		$player safeholster 1
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+
+	self nodamage
+
+	forcemusic aux4 aux4
+
+	self walkto self.target
+	
+	$cam_follow_comander speed 1.6
+	$cam_follow_comander follow $col_camera_path
+	$cam_follow_comander cut
+	cuecamera $cam_follow_comander
+
+	wait 10
+	
+	$cam_behind_dudes fov 60
+	$cam_behind_dudes watch self
+	$cam_behind_dudes cut
+	cuecamera $cam_behind_dudes
+
+	//colonel salutes the officers		
+	self anim american_salute
+
+	wait 1.6
+
+	//show the bodies
+	$bodies1 show
+	$bodies2 show
+	$bodies3 show
+	$bodies4 show
+
+	$axis_camera speed .6
+	$axis_camera fov 100
+	$axis_camera follow $axis_camera_path
+	$axis_camera cut
+	cuecamera $axis_camera
+
+	wait 8
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+end	   
+
+
+//-----------------------------------------------
+//Axis officers handler
+//-----------------------------------------------
+Do_Axis_Officers_End:
+
+	self nodamage
+	self lookat $colonel
+
+	local.rand = randomfloat 0.50
+	local.wait = 8 + local.rand
+
+	wait local.wait
+	
+	//Officers salute the colonel
+	self anim american_salute
+	self waittill animdone
+
+	self anim atease
+
+end

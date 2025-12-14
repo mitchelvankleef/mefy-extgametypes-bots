@@ -1,0 +1,156 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+main:
+	level.script = maps/dm/mp_bahnhof_dm.scr
+	level.music = mp_bahnhof_dm
+
+thread prep_for_handles
+thread prep_for_electro_field
+
+// set scoreboard messages
+setcvar "g_obj_alliedtext1" "Bahnhof"
+setcvar "g_obj_alliedtext2" ""
+setcvar "g_obj_alliedtext3" ""
+setcvar "g_obj_axistext1" ""
+setcvar "g_obj_axistext2" ""
+setcvar "g_obj_axistext3" ""
+
+setcvar "g_scoreboardpic" "mp_bahnhof_dm"
+
+	level.mef_mapname = "mp_bahnhof_dm"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
+	level.mef_defaultgametype = "ft"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "-4784.87 3697.87 -447.88 0 SW Street" "-377.89 1599.13 -447.88 90 NE Train-yard"
+			waitthread global/libmef/bases.scr::addbasepair "-5579.07 2272.87 -447.88 -90 SE Street" "-1264.23 5680.88 -447.88 -90 NW Train-yard"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+	}
+		
+	level waitTill prespawn
+
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+	exec global/door_locked.scr::lock
+	exec global/ambient.scr
+	level waittill spawn
+
+	// added proper farplane_color
+//	$world farplane_color ( ( 210.0 / 255.0 ) ( 204.0 / 255.0 ) ( 218.0 / 255.0 ) )
+//	$world farplane_cull 1
+
+end
+
+//-----------------------------------------------------------------------------
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+	
+	level waitTill prespawn
+
+	level waittill spawn
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+//	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end
+
+
+
+
+
+
+//*>>	For Electro Death Wires added by Vex 7/24/02
+//*>>	Prep for handles
+
+prep_for_handles:
+
+	$electro_handle_1 	bind $electro_handle_1_origin
+	$electro_handle_2 	bind $electro_handle_2_origin
+	wait .2
+end
+
+prep_for_electro_field:
+	$electro_field nottriggerable
+end
+
+electro_handle_1:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if ( level.doing_electro1==1 )
+		end
+	level.doing_electro1 = 1
+
+	$electro_handle_1 notsolid
+
+	$electro_field triggerable
+	trigger $electro_field 
+	$electro_handle_1_origin speed 1.0
+	$electro_handle_1_origin rotatexdownto 90
+	$electro_handle_1_origin playsound electricalswitch_down
+	$electro_handle_1_origin waitmove
+	wait 6
+	$electro_handle_1_origin  rotatexupto 0
+	$electro_handle_1_origin playsound 	electricalswitch_up
+	$electro_handle_1_origin waitmove
+	wait .2
+	waitthread prep_for_electro_field
+//	pause
+	level.doing_electro1 = 0
+end
+
+electro_handle_2:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if ( level.doing_electro2==1 )
+		end
+	level.doing_electro2 = 1
+
+	$electro_handle_2 notsolid
+
+	$electro_field triggerable
+	$electro_handle_2_origin speed 1.0
+	$electro_handle_2_origin rotatexdownto -90
+	$electro_handle_1_origin playsound electricalswitch_down
+	$electro_handle_2_origin waitmove
+	wait 6
+	$electro_handle_2_origin  rotatexupto 0
+	$electro_handle_1_origin playsound 	electricalswitch_up
+	$electro_handle_2_origin waitmove
+	wait .2
+	waitthread prep_for_electro_field
+	level.doing_electro2 = 0
+
+end

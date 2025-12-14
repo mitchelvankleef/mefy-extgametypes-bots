@@ -65,6 +65,7 @@ setcvar "g_scoreboardpic" "mohdm7"
 		exec global/ambient.scr mohdm7
 	
 	level waittill spawn
+	$world farclipoverride -1
 	
 end
 

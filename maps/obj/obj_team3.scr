@@ -108,6 +108,7 @@ main:
 	exec global/ambient.scr obj_team5
 
 	level waittill spawn
+	$world farclipoverride -1
 
 	if (!level.mef_devmode && level.roundbased)
 	{

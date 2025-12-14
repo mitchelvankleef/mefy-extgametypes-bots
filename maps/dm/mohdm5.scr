@@ -60,6 +60,7 @@ setcvar "g_scoreboardpic" "mohdm5"
 	exec global/ambient.scr mohdm5
 
 	level waittill spawn
+	$world farclipoverride -1
 
 
 snow:
@@ -74,7 +75,7 @@ snow:
 	level.rain_min_dist = "1800"
 	//level.rain_min_dist = "512"
 	level.rain_numshaders = 12
-	level.rain_shader = "textures/snow0"
+	level.rain_shader = "textures/snow"
 
 
 end

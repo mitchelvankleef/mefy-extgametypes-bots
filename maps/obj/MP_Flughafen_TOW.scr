@@ -1,0 +1,960 @@
+// MP_Flughafen_TOW
+// Note: For objective function calls TakeOver and SetCurrent the
+// teams are as such:
+// 0 = Axis
+// 1 = Allies
+// 2 = Neutral
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.1 (08-15-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+//----------------------------------------------------------
+// Main
+//----------------------------------------------------------
+main:
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Flughafen" 
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_flughafen_tow" 
+
+	level.mef_mapname = "mp_flughafen_tow"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"tow"::"ft"::"ctf"::"ftctf"::"fttow"
+	level.mef_defaultgametype = "fttow"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "3104.87 3101.83 -23.88 180 North Wall" "-2966.4 80.87 -23.88 -90 Rear Of E Hangar"
+			waitthread global/libmef/bases.scr::addbasepair "-334.13 3920.46 -23.88 180 S Side W Hangar" "544.87 -800.82 -23.88 180 N Control Tower"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+
+		case "tow":
+			thread towthread
+			break
+
+		case "fttow":
+			thread global/libmef/ft.scr::ft_begin
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_Flughafen_TOW.scr"	
+	level.music="MP_Flughafen_TOW"	
+
+	exec global/ambient.scr
+	exec global/door_locked.scr
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//remove all ai
+		$enemyspawner remove
+
+		$gmc_bomb remove
+		$opel_bomb remove
+	}
+
+	//add in our clip brushes
+	local.clipbrush = spawn script_object
+	local.clipbrush.origin = ( -1125 4470 -10 )
+	local.clipbrush setsize ( -340 -220 -100 ) ( 340 150 120 )
+	local.clipbrush.angles = ( 0 347 0 )
+	local.clipbrush solid
+
+	//set our farplane and culling parameters
+	$world farplane 3000
+	$world farplane_color ".03 .05 .09"  //this matches eben's new sky
+	$world farplane_cull 2
+
+	//Open the hangar 1 doors
+	$hangar_doors_1 open $hangar_doors_1_entity
+	
+	// open these doors at the start...
+	$cine_hangar_doors open $cine_hangar_doors_entity
+	
+	//Turn off the lights!
+	thread init_runway_lights
+
+	level waittill prespawn
+	
+	level waittill spawn
+
+	//init aagun params
+	$aagun.collisionent = $aagun_collision
+	$aagun_turret0.collisionent = $aagun_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$aagun thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_aagun_d.tik" $aagun_destroyed_collision
+	}
+
+	//init granatwefer 1 params
+	$granat_1.collisionent = $granatwerfer_collision
+	$granat_1_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$granat_1 thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$granat_1_turret0 maxyawoffset "40"
+
+
+	//init granatwefer 2 params
+	$granat_2.collisionent = $granatwerfer_collision
+	$granat_2_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$granat_2 thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$granat_2_turret0 maxyawoffset "40"
+end
+
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end
+
+
+towthread:	
+	exec global/ai.scr
+	exec global/friendly.scr
+	exec global/tow_dm.scr
+
+	setcvar "g_obj_alliedtext1" "Protect Allied Transport"
+	setcvar "g_obj_alliedtext2" "Open 1st Hangar Doors"
+	setcvar "g_obj_alliedtext3" "Turn On the Runway Lights"
+	setcvar "g_obj_alliedtext4" "Open the 2nd Hangar Doors"
+	setcvar "g_obj_alliedtext5" "Detonate Axis Motorpool"
+
+	setcvar "g_obj_axistext1" "Protect Axis Motorpool"
+	setcvar "g_obj_axistext2" "Close the 2nd Hangar Doors"
+	setcvar "g_obj_axistext3" "Turn Off the Runway Lights"
+	setcvar "g_obj_axistext4" "Close the 1st Hangar Doors"
+	setcvar "g_obj_axistext5" "Destroy Allied Transport"
+	
+	//////////////////////////
+	level waittill prespawn
+	//////////////////////////
+	
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_allied_spawner 1 5 1
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_axis_spawner 5 1 5
+
+	//////////////////////////
+	level waittill spawn
+	//////////////////////////	
+	
+	// set the parameters for this round based match	
+	level.bRoundStarted			= 0
+//	level.dmrespawning			= 1			// 1 or 0	
+	level.clockside				= axis		// set to axis, allies, kills, or draw
+	level.dmroundlimit			= 15		// round time limit in minutes
+	level.numObjectives			= 5			// Number of objectives needed to win
+
+	level.hangar1_switch_up		= 1
+	level.hangar2_switch_up		= 1
+	level.runway_switch_up		= 1	
+
+	//////////////////////////
+	if (!level.mef_devmode)
+	{
+		level waittill roundstart
+	}
+	//////////////////////////
+	
+	thread init_switches
+	thread init_spawner_bombs		
+
+	//Flip the hangar switch		
+	thread toggle_hangar_1_doors_switch
+
+	//Setup the starting team objectives	
+	thread set_objectives
+		
+	level.bRoundStarted = 1
+		
+end
+
+
+//----------------------------------------------------------
+//Destroy the Allied spawner here
+//----------------------------------------------------------
+destroy_allied_spawner local.planter:	
+	
+	iprintln "The Allied transport has been destroyed!"
+
+	//Take over the objective
+	$obj_allied_spawner TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+
+	iprintln "The Allied Team can no longer respawn!"
+
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+
+	thread Check_End_Match
+	
+end
+
+//----------------------------------------------------------
+//Destroy the Axis spawner here
+//----------------------------------------------------------
+destroy_axis_spawner local.planter:
+	
+	iprintln "The Axis Motorpool has been destroyed!"
+		
+	//Take over the objective
+	$obj_axis_spawner TakeOver 1
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	iprintln "The Axis Team can no longer respawn!"
+
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Open/close the 1st Hangar Doors here
+//----------------------------------------------------------
+toggle_hangar_doors_1:	
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+	
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $obj_hangar_doors_1.ControlledBy != 0 )
+			{			
+				//flip the switch
+				thread toggle_hangar_1_doors_switch
+
+				//Close the hangar doors
+				$hangar_doors_1 close $hangar_doors_1_entity
+				$hangar_doors_1 playsound hanger_closed
+
+				$obj_hangar_doors_1 TakeOver 0				
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have closed the 1st Hangar Doors!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $obj_hangar_doors_1.ControlledBy != 1 )
+			{		
+				//flip the switch
+				thread toggle_hangar_1_doors_switch
+				
+				//Open the pen doors
+				$hangar_doors_1 open $hangar_doors_1_entity
+				$hangar_doors_1 playsound hanger_open
+
+				$obj_hangar_doors_1 TakeOver 1
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Allies have opened the 1st Hangar Doors!"
+			}
+		}
+
+		
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Open/close the 2st Hangar Doors here
+//----------------------------------------------------------
+toggle_hangar_doors_2:	
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+	
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $obj_hangar_doors_2.ControlledBy != 0 )
+			{			
+				//flip the switch
+				thread toggle_hangar_2_doors_switch
+				
+				//Close the hangar doors
+				$hangar_doors_2 close $hangar_doors_2_entity
+				$hangar_doors_2 playsound hanger_closed
+
+				$obj_hangar_doors_2 TakeOver 0
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have closed the 2nd Hangar Doors!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $obj_hangar_doors_2.ControlledBy != 1 )
+			{		
+				//flip the switch
+				thread toggle_hangar_2_doors_switch
+				
+				//Open the hangar doors
+				$hangar_doors_2 open $hangar_doors_2_entity
+				$hangar_doors_2 playsound hanger_open
+
+				$obj_hangar_doors_2 TakeOver 1
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Allies have opened the 2nd Hangar Doors!"				
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Turn on/Shut down the runway lights
+//----------------------------------------------------------
+toggle_runway_lights:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+	
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == allies )
+		{
+			if( $obj_runway_lights.ControlledBy != 1 )
+			{
+				//Take the objective
+				$obj_runway_lights TakeOver 1
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Allies have turned on the Runway Lights!"
+
+				//flip the switch
+				thread toggle_runway_switch				
+
+				waitthread turn_on_runway_lights
+
+			}
+		}
+		else if( parm.other.dmteam == axis )
+		{		
+			if( $obj_runway_lights.ControlledBy != 0 )
+			{			
+				//Take the objective
+				$obj_runway_lights TakeOver 0
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have turned off the Runway Lights!"	
+
+				//flip the switch
+				thread toggle_runway_switch
+				waitthread turn_off_runway_lights
+
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Initialize the runway lights
+//----------------------------------------------------------
+init_runway_lights:
+
+	$run_lights_01 hide	
+	$run_lights_02 hide	
+	$run_lights_03 hide	
+	$run_lights_04 hide	
+	$run_lights_05 hide	
+	$run_lights_06 hide	
+	$run_lights_07 hide	
+	$run_lights_08 hide	
+	$run_lights_09 hide	
+	$run_lights_10 hide	
+	$run_lights_11 hide	
+	$run_lights_12 hide	
+
+end
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:
+	
+	//First lets do the allies
+	if( $obj_hangar_doors_1.ControlledBy == 0 )
+	{			
+		$obj_hangar_doors_1 SetCurrent 1
+	}	
+	else if( $obj_runway_lights.ControlledBy == 0 )
+	{	
+		$obj_runway_lights SetCurrent 1
+	}
+	else if( $obj_hangar_doors_2.ControlledBy == 0 )
+	{
+		$obj_hangar_doors_2 SetCurrent 1
+	}
+	else if( $obj_axis_spawner.ControlledBy == 0 )
+	{
+		$obj_axis_spawner SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $obj_hangar_doors_2.ControlledBy == 1 )
+	{
+		$obj_hangar_doors_2 SetCurrent 0
+	}
+	else if( $obj_runway_lights.ControlledBy == 1 )
+	{			
+		$obj_runway_lights SetCurrent 0
+	}
+	else if( $obj_hangar_doors_1.ControlledBy == 1 )
+	{	
+		$obj_hangar_doors_1 SetCurrent 0
+	}
+	else if( $obj_allied_spawner.ControlledBy == 1 )
+	{
+		$obj_allied_spawner SetCurrent 0			
+	}	
+
+end
+
+//----------------------------------------------------------
+//init the spawner bombs
+//----------------------------------------------------------
+init_spawner_bombs:
+
+	//Allied spawner bomb
+	$gmc_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_Flughafen_TOW.scr::destroy_allied_spawner
+	$opel_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_Flughafen_TOW.scr::destroy_axis_spawner
+
+end
+
+
+//----------------------------------------------------------
+//init the trigger switches
+//----------------------------------------------------------
+init_switches:
+
+	$hangar_doors_1_switch bind $hangar_doors_1_switch_origin
+	$hangar_doors_2_switch bind $hangar_doors_2_switch_origin
+	$runway_switch bind $runway_switch_origin
+
+	//make all the switches non solid so as not to injure the player when triggered.
+	$hangar_doors_1_switch notsolid
+	$hangar_doors_1_switch_origin notsolid
+	
+	$hangar_doors_2_switch notsolid
+	$hangar_doors_2_switch_origin notsolid
+	
+	$runway_switch notsolid
+	$runway_switch_origin notsolid
+
+end
+
+//--------------------------------------------------------------
+//Open hangar 1 doors
+//--------------------------------------------------------------
+toggle_hangar_1_doors_switch:
+	
+	if( level.hangar1_switch_up == 1 )
+	{
+		level.hangar1_switch_up = 0
+		$hangar_doors_1_switch_origin speed 1.0
+		$hangar_doors_1_switch_origin rotatezdownto 180
+		$hangar_doors_1_switch_origin waitmove
+		$hangar_doors_1_switch_origin playsound switchbox
+	}
+	else
+	{
+		level.hangar1_switch_up = 1
+		$hangar_doors_1_switch_origin speed 1.0
+		$hangar_doors_1_switch_origin rotatezupto 0
+		$hangar_doors_1_switch_origin waitmove
+		$hangar_doors_1_switch_origin playsound switchbox
+	}
+
+end
+
+//--------------------------------------------------------------
+//Open hangar 2 doors
+//--------------------------------------------------------------
+toggle_hangar_2_doors_switch:
+	
+	if( level.hangar2_switch_up == 1 )
+	{
+		level.hangar2_switch_up = 0
+		$hangar_doors_2_switch_origin speed 1.0
+		$hangar_doors_2_switch_origin rotatezdownto 180
+		$hangar_doors_2_switch_origin waitmove
+		$hangar_doors_2_switch_origin playsound switchbox
+	}
+	else
+	{
+		level.hangar2_switch_up = 1
+		$hangar_doors_2_switch_origin speed 1.0
+		$hangar_doors_2_switch_origin rotatezupto 0
+		$hangar_doors_2_switch_origin waitmove
+		$hangar_doors_2_switch_origin playsound switchbox
+	}
+
+end
+
+//--------------------------------------------------------------
+//Turn on Runway Lights
+//--------------------------------------------------------------
+toggle_runway_switch:
+	
+	if( level.runway_switch_up == 1 )
+	{
+		level.runway_switch_up = 0
+		$runway_switch_origin speed 1.0
+		$runway_switch_origin rotatezdownto 180
+		$runway_switch_origin waitmove
+		$runway_switch_origin playsound switchbox
+	}
+	else
+	{
+		level.runway_switch_up = 1
+		$runway_switch_origin speed 1.0
+		$runway_switch_origin rotatezupto 0
+		$runway_switch_origin waitmove
+		$runway_switch_origin playsound switchbox
+	}
+
+end
+
+//-----------------------------------------------
+// Turn off the runway lights
+//-----------------------------------------------
+turn_on_runway_lights:
+
+	//Turn on the lights
+	$run_lights_01 show
+	$run_lights_01 playsound runway_lights_on
+	wait .2
+	$run_lights_02 show
+	$run_lights_02 playsound runway_lights_on
+	wait .2
+	$run_lights_03 show
+	$run_lights_03 playsound runway_lights_on
+	wait .2
+	$run_lights_04 show
+	$run_lights_04 playsound runway_lights_on
+	wait .2
+	$run_lights_05 show
+	$run_lights_05 playsound runway_lights_on
+	wait .2
+	$run_lights_06 show
+	$run_lights_06 playsound runway_lights_on
+	wait .2
+	$run_lights_07 show
+	$run_lights_07 playsound runway_lights_on
+	wait .2
+	$run_lights_08 show
+	$run_lights_08 playsound runway_lights_on
+	wait .2
+	$run_lights_09 show
+	$run_lights_09 playsound runway_lights_on
+	wait .2
+	$run_lights_10 show
+	$run_lights_10 playsound runway_lights_on
+	wait .2
+	$run_lights_11 show
+	$run_lights_11 playsound runway_lights_on
+	wait .2
+	$run_lights_12 show
+	$run_lights_12 playsound runway_lights_on
+
+end
+
+//-----------------------------------------------
+// Turn off the runway lights
+//-----------------------------------------------
+turn_off_runway_lights:
+
+	//Turn off the lights
+	$run_lights_01 hide
+	$run_lights_01 playsound runway_lights_off
+	wait .2
+	$run_lights_02 hide
+	$run_lights_02 playsound runway_lights_off
+	wait .2
+	$run_lights_03 hide
+	$run_lights_03 playsound runway_lights_off
+	wait .2
+	$run_lights_04 hide
+	$run_lights_04 playsound runway_lights_off
+	wait .2
+	$run_lights_05 hide
+	$run_lights_05 playsound runway_lights_off
+	wait .2
+	$run_lights_06 hide
+	$run_lights_06 playsound runway_lights_off
+	wait .2
+	$run_lights_07 hide
+	$run_lights_07 playsound runway_lights_off
+	wait .2
+	$run_lights_08 hide
+	$run_lights_08 playsound runway_lights_off
+	wait .2
+	$run_lights_09 hide
+	$run_lights_09 playsound runway_lights_off
+	wait .2
+	$run_lights_10 hide
+	$run_lights_10 playsound runway_lights_off
+	wait .2
+	$run_lights_11 hide
+	$run_lights_11 playsound runway_lights_off
+	wait .2
+	$run_lights_12 hide
+	$run_lights_12 playsound runway_lights_off
+
+end
+
+//-----------------------------------------------
+// Check for end match condition
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAxis		= 0
+
+	//Allied Spawner
+	if( $obj_allied_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+
+	//Axis Spawner
+	if( $obj_axis_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+
+	//Hangar Doors 1
+	if( $obj_hangar_doors_1.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+
+	//Hangar Doors 2
+	if( $obj_hangar_doors_2.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	
+	//Runway lights
+	if( $obj_runway_lights.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+
+	//Allies first
+	if( $obj_runway_lights.ControlledBy == 1 && $obj_hangar_doors_1.ControlledBy == 1 && $obj_hangar_doors_2.ControlledBy == 1 )
+	{
+		//Only show the movie if the wingame cvar has not been set yet.
+		local.winstate = int( getcvar( g_TOW_winstate ) )
+		if( local.winstate == 0 )
+		{
+			setcvar "g_TOW_winstate" "1"
+
+			//ignore the clock
+			level ignoreclock 1
+			level.mef_gameover = 1
+
+			//if there is a bomb ticking stop it.
+			waitthread global/libmef/bomb.scr::StopBomb
+
+			//Allies win do the movie then end the map
+			thread AlliesWon
+		}
+	}
+	else if( local.nAxis == level.numObjectives )
+	{
+		//Only show the movie if the wingame cvar has not been set yet.
+		local.winstate = int( getcvar( g_TOW_winstate ) )
+		if( local.winstate == 0 )
+		{
+			setcvar "g_TOW_winstate" "1"
+		
+			//ignore the clock
+			level ignoreclock 1
+			level.mef_gameover = 1
+
+			//if there is a bomb ticking stop it.
+			waitthread global/libmef/bomb.scr::StopBomb
+
+			//Axis win do their movie and end the map		
+			thread AxisWon
+		}
+	}
+
+end
+
+//-------------------------------------------------------------
+// Do the Allied camera stuff
+//-------------------------------------------------------------
+DoAlliedCamera local.ent:
+
+	local.camera = spawn func_camera origin $cam01.origin angles $cam01.angles
+
+	local.camera fov 100
+	local.camera watch local.ent
+	local.camera cut
+	cuecamera local.camera
+
+end
+
+//-------------------------------------------------------------
+//  when allies win, we watch the two planes take off and do a 
+//	fly-by passed each other....
+//-------------------------------------------------------------
+AlliesWon:
+
+	$player nodamage
+	$player hide
+	freezeplayer
+	drawhud 0
+	level.mef_hidehud = 1
+
+	level ignoreclock 1
+	level.mef_gameover = 1
+	
+	// FIX BEFORE RELEASE: delete the following comment before release
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	// See why we need to delete that? :-), what are you doing reading this anyway
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+
+	forcemusic aux2 aux2
+	
+	local.plane = spawn script_model model vehicles/ho-ix.tik origin $p00.origin angles $p00.angles
+	local.plane notsolid
+	local.plane thread TakeOff $p00
+
+	thread DoAlliedCamera local.plane
+	
+	local.plane2 = spawn script_model model vehicles/ho-ix.tik origin $p_00.origin angles $p_00.angles
+	local.plane2 waitthread TakeOff $p_00
+	
+	forcemusic aux3 aux3
+	
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	wait 5
+
+end
+
+//-------------------------------------------------------------
+// have the plane take off
+//-------------------------------------------------------------
+TakeOff local.path:
+
+	self notsolid
+	self playsound plane	// todo: more appropriate sound maybe?
+	thread RaiseLandingGear
+	self followpath local.path
+	self waitmove
+	self delete
+
+end
+
+//--------------------------------------------------------------
+// Raise the landing gear
+//--------------------------------------------------------------
+RaiseLandingGear:
+	
+	wait 2
+
+	self anim takeoff
+
+end
+
+
+//-------------------------------------------------------------
+//	Watch the allies run by while the germans shoot at them...
+//	much like berlin's ending....
+//	open hanger door?
+//-------------------------------------------------------------
+AxisWon:
+
+	$player nodamage
+	$player hide
+	freezeplayer
+	
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+	drawhud 0
+	level.mef_hidehud = 1
+	
+	forcemusic aux4 aux4
+
+	local.camera = spawn func_camera origin $axiswincam.origin angles $axiswincam.angles
+
+	local.camera cut
+	cuecamera local.camera
+
+	waitthread global/ai.scr::spawnset 30 set30
+	waitthread global/ai.scr::spawnset 40 set40
+
+	for (local.i=1;local.i<=$set30.size;local.i++)
+	{
+		$set30[local.i] thread RunAway
+	}
+
+	wait 0.75	
+	for (local.i=1;local.i<=$set40.size;local.i++)
+	{
+		$set40[local.i] thread Chase
+	}
+	
+	wait 7
+
+	$cine_hangar_doors close $cine_hangar_doors_entity
+
+	wait 8
+
+	forcemusic aux5 aux5
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+	wait 5
+
+end
+
+//-------------------------------------------------------------
+//RunAway dudes running away
+//-------------------------------------------------------------
+RunAway:
+	
+	self exec global/disable_ai.scr
+	self nodamage
+	self runto self.target
+
+end
+
+//-------------------------------------------------------------
+// Chase dudes chasing the dudes running away..
+//-------------------------------------------------------------
+Chase local.target:	
+	
+	self exec global/disable_ai.scr
+	self nodamage	
+	self runto self.target
+
+	self thread FireShots $set30[1]
+
+end
+
+//-------------------------------------------------------------
+// Fire!
+//-------------------------------------------------------------
+FireShots local.target:
+
+	self aimat local.target
+	
+	while ( isAlive self )
+	{
+		local.rand = randomfloat 0.75
+		local.rand += 0.2
+
+		wait local.rand
+		self fire
+	}
+
+end

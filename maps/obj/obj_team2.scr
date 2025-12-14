@@ -85,6 +85,7 @@ main:
 	//thread global/barrel.scr::explosive_barrel
 
 	level waittill spawn
+	$world farclipoverride -1
 
 	if (!level.mef_devmode && level.roundbased)
 	{

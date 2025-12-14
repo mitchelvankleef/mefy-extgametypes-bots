@@ -1,0 +1,265 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+main:
+	level.script = maps/dm/MP_Malta_DM.scr
+	level.music = mp_malta_dm
+
+
+	setcvar "g_obj_alliedtext1" "Malta"
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_malta_dm"
+
+	level.mef_mapname = "mp_malta_dm"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
+	level.mef_defaultgametype = "ft"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "2431.08 2360.09 -1407.88 -90 NW Sector" "-128.09 -800.87 -1412.28 90 SE Sector"
+			waitthread global/libmef/bases.scr::addbasepair "-1088.20 1288.86 -1735.88 0 S River" "2536.88 -918.83 -1191.88 180 N Doors"
+			waitthread global/libmef/bases.scr::addbasepair "-1045.13 1924.10 -1399.88 0 S River" "500.15 -2096.87 -1367.88 90 NE sector"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+	}
+		
+	level waittill prespawn
+	
+	exec global/ambient.scr
+	exec global/DMprecache.scr
+	exec global/door_locked.scr
+	exec global/exploder.scr
+
+	$alliedmortar.collisionent = $granatwerfer_collision
+	$alliedmortar_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$alliedmortar thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$alliedmortar_turret0 maxyawoffset "40"
+
+	$alliedmortar2.collisionent = $granatwerfer_collision
+	$alliedmortar2_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$alliedmortar2 thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$alliedmortar2_turret0 maxyawoffset "40"
+	
+	$axismortar.collisionent = $granatwerfer_collision
+	$axismortar_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$axismortar thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$axismortar_turret0 maxyawoffset "40"
+
+	$axismortar2.collisionent = $granatwerfer_collision
+	$axismortar2_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$axismortar2 thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+	$axismortar2_turret0 maxyawoffset "40"
+
+	level waittill spawn
+
+	// Add in our clip brush at the cheat point.
+	local.clipbrush = spawn script_object
+	local.clipbrush.origin = ( -1056 -384 -1412 )
+	local.clipbrush setsize ( -36 -16 -76 ) ( 36 16 76 )
+	local.clipbrush solid
+
+	$mg42 pitchcaps ( -25 45 0)
+	$mg42 maxyawoffset "80"
+	$mg42_2 pitchcaps ( -25 45 0)
+	$mg42_2 maxyawoffset "65"
+	level.portcullis_open = 1
+	$trapdoor thread trapdoor_init
+	$portcullis_switch bind $portcullis_switch_origin
+	
+	//make all the switches non solid so as not to injure the player when triggered.
+	$portcullis_switch notsolid	
+	$portcullis_switch_origin notsolid
+	$portcullis open $portcullis_entity
+
+	$walltrigger thread exploder_init 1
+	$bridgetrigger thread exploder_init 2
+	$walltrigger2 thread exploder_init 3
+	$nudietrigger thread exploder_init 4
+	$debristrigger thread exploder_init 5
+	$balconytrigger thread exploder_init 6
+	$limestonetrigger1 thread exploder_init 7`
+	$limestonetrigger2 thread exploder_init 8
+	$towercorner_trigger thread exploder_init 9
+	$prisoncorner_trigger thread exploder_init 10
+	$bunkertrigger thread exploder_init 11
+	$alleytrigger thread exploder_init 12
+
+end
+
+
+roundbasedthread:
+ 
+	level waitTill prespawn
+ 
+	level waittill spawn
+	
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+ 
+	level waittill roundstart
+	$portcullis open $portcullis_entity
+
+
+//--------------------------------------------------------------
+//Open Portcullis
+//--------------------------------------------------------------
+animate_portcullis_switch:
+	
+	dprintln "animating the switch"
+	dprintln "level.portcullis_open = " level.portcullis_open
+	if( level.portcullis_open == 1 )
+	{
+		dprintln "rotating down"
+		$portcullis_switch_origin speed 5
+		$portcullis_switch_origin rotatezdownto 180
+		$portcullis_switch_origin waitmove
+		$portcullis_switch_origin playsound switchbox
+	}
+	else
+	{
+		dprintln "rotating up"
+		$portcullis_switch_origin speed .1
+		$portcullis_switch_origin rotatezupto 0
+		$portcullis_switch_origin waitmove
+		$portcullis_switch_origin playsound switchbox
+	}
+end
+
+toggle_portcullis:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	$portcullis_trigger nottriggerable
+	thread animate_portcullis_switch
+	if (level.portcullis_open == 1)
+	{
+		$portcullis_entity playsound portcullis_close_move
+		$portcullis close $portcullis_entity
+		wait 5
+		$portcullis_entity playsound portcullis_close_stop
+		level.portcullis_open = 0
+	}
+	else
+	{
+		$portcullis_entity playsound portcullis_open_move
+		$portcullis open $portcullis_entity
+		wait 5	
+		$portcullis_entity playsound portcullis_open_stop	
+		level.portcullis_open = 1
+	}
+	$portcullis_trigger triggerable
+end
+
+trapdoor_init:
+	self solid
+	self damage 0
+	level.trapdoor_state = 0
+trapdoor_loop_start:
+	self waittill use
+
+	if (parm.other.mef_spectator)
+	{
+		goto trapdoor_loop_start
+	}
+
+	if (level.trapdoor_state  == 0)
+	{
+		self thread trapdoor_open
+	}
+	else if (level.trapdoor_state  == 1)
+	{
+		self thread trapdoor_close
+	}
+	goto trapdoor_loop_start
+end
+
+trapdoor_cycle local.duration:
+	wait local.duration
+	if (level.trapdoor_state == 1)
+	{
+		self thread trapdoor_close		
+	}
+end
+
+trapdoor_open:
+	level.trapdoor_state = 1
+	self openportal
+	self playsound gate_wood_open_move
+	self rotatezupto 90
+	self time 1
+	self waitmove
+	self playsound gate_wood_open_stop
+	self thread trapdoor_cycle 15
+	
+end
+
+trapdoor_close:
+	self playsound gate_wood_close_move
+	level.trapdoor_state = 0
+	self rotatezdownto 0
+	self time 1
+	self waitmove
+	self playsound gate_wood_close_stop
+	self closeportal
+end
+
+// Exploders
+//
+// Exploding Wall
+
+exploder_init local.set:
+	self immune bash
+	self immune bullet
+	self immune shotgun
+
+exploder_start_loop:
+	self waittill damage
+	dprintln "Hit! " self.health
+	if (self.health > 0)
+		goto exploder_start_loop
+	dprintln "BOOM!"
+	thread global/exploder.scr::explode local.set
+	self remove
+end
+

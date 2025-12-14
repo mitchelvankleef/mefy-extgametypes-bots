@@ -67,6 +67,7 @@ setcvar "g_scoreboardpic" "mohdm4"
 	thread global/minefield.scr::minefield_setup
 
 	level waittill spawn
+	$world farclipoverride -1
 
 end
 

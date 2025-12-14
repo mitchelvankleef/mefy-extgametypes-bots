@@ -80,6 +80,7 @@ main:
 	exec global/door_locked.scr::lock
 
 	level waittill spawn
+	$world farclipoverride -1
 end
 
 

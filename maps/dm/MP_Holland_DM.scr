@@ -1,0 +1,84 @@
+// Holland
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+main:
+
+level.script = "maps/dm/MP_Holland_DM.scr"
+level.music = "MP_Holland_DM"
+
+// set scoreboard messages
+setcvar "g_obj_alliedtext1" "Holland" 
+setcvar "g_obj_alliedtext2" ""
+setcvar "g_obj_alliedtext3" ""
+setcvar "g_obj_axistext1" ""
+setcvar "g_obj_axistext2" ""
+setcvar "g_obj_axistext3" ""
+
+setcvar "g_scoreboardpic" "mp_holland_dm.tga"
+
+	level.mef_mapname = "mp_holland_dm"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
+	level.mef_defaultgametype = "ft"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "-852.85 -2560.87 0.13 90 SE Sector" "527.13 864.46 0.12 0 NW Sector"
+			waitthread global/libmef/bases.scr::addbasepair "-2189.87 827.07 12.33 90 SW Schoolhouse" "1328.87 -1809.02 0.13 180 NE Sector"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+	}
+
+level waitTill prespawn
+
+exec global/ambient.scr
+exec global/door_locked.scr
+exec global/DMprecache.scr
+
+
+level waittill spawn
+
+waitframe
+
+$world farplaneclipcolor "0.75 0.75 0.90"
+
+end
+
+//-----------------------------------------------------------------------------
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+	
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+//	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end

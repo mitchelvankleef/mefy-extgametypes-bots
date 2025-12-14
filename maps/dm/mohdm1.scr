@@ -71,6 +71,8 @@ setcvar "g_scoreboardpic" "mohdm1"
 
 	level waittill spawn
 
+	$world farclipoverride -1
+
 end
 
 //-----------------------------------------------------------------------------

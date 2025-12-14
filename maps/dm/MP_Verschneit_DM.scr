@@ -1,0 +1,86 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+main:
+
+level.script = "maps/dm/MP_verschneit_DM.scr"
+level.music = "MP_verschneit_DM"
+
+// set scoreboard messages
+setcvar "g_obj_alliedtext1" "Verschneit" 
+setcvar "g_obj_alliedtext2" ""
+setcvar "g_obj_alliedtext3" ""
+setcvar "g_obj_axistext1" ""
+setcvar "g_obj_axistext2" ""
+setcvar "g_obj_axistext3" ""
+
+setcvar "g_scoreboardpic" "mp_verschneit_dm.tga"
+
+	level.mef_mapname = "mp_verschneit_dm"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
+	level.mef_defaultgametype = "ft"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "-3392.87 -1215.48 8.13 0 SW Sector" "-1027.89 -1311.13 -127.88 -90 Under W Bridge"
+			waitthread global/libmef/bases.scr::addbasepair "-2356.75 372.87 8.13 -90 W Sector" "-82.40 -2815.13 -287.88 -90 N Central Gutter"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+	}
+		
+	level waitTill prespawn
+
+		exec global/ambient.scr
+		exec global/DMprecache.scr
+		exec global/door_locked.scr
+
+	local.fix = spawn script_model
+	local.fix model "static/barbwire_long_two_post.tik"
+	local.fix.origin = ( -3130.00 -3400.80 380.45 )
+	local.fix.angles = (0 90 0)
+	local.fix.scale = 0.70
+	local.fix hide
+	local.fix solid
+
+	level waittill spawn
+
+end
+
+
+//-----------------------------------------------------------------------------
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+	
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+//	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+end
+

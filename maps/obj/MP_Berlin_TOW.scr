@@ -1,0 +1,1244 @@
+// MP_Berlin_TOW
+//
+// Note: For objective function calls TakeOver and SetCurrent the
+// teams are as such:
+// 0 = Axis
+// 1 = Allies
+// 2 = Neutral
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.1 (08-15-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+//----------------------------------------------------------
+// Main
+//----------------------------------------------------------
+main:
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Berlin" 
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_Berlin_tow" 
+
+	level.mef_mapname = "mp_berlin_tow"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"tow"::"ft"::"ctf"::"ftctf"::"fttow"
+	level.mef_defaultgametype = "fttow"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "5436.88 1041 24.13 180 Allied Street" "-3698.8 2377.41 24.13 -135 Axis Street"
+			waitthread global/libmef/bases.scr::addbasepair "2627.81 1321.58 24.13 45 NE Riverbank" "-1548.88 1137.13 24.13 90 SE Sector Street"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+
+		case "tow":
+			thread towthread
+			break
+
+		case "fttow":
+			thread global/libmef/ft.scr::ft_begin
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_Berlin_TOW.scr"	
+	level.music="MP_Berlin_TOW"	
+
+	$world farplane_color ".335 .335 .36"
+
+	exec global/ambient.scr
+	exec global/exploder.scr
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//remove all ai
+		$enemyspawner remove
+
+		//Not a TOW game remove the bombs
+		$gmc_bomb remove
+		$mg42_bomb remove
+		$bridge_bomb remove
+		$archway_bomb remove
+	}
+
+	level waittill prespawn
+
+	level waittill spawn
+
+	//	AA Gun Properties
+    $flak88.collisionent = $flak88_collision
+	$flak88_turret0.collisionent = $flak88_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$flak88 thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/flak88_d.tik" $flak88_destroyed_collision
+	}
+
+ 	$aagun.collisionent = $aagun_collision
+	$aagun_turret0.collisionent = $aagun_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$aagun thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_aagun_d.tik" $aagun_destroyed_collision
+	}
+ 
+	$aagun_turret0 maxyawoffset 115.0
+	$aagun_turret0 turnspeed 25
+	$aagun_turret0 pitchspeed 25
+	$aagun_turret0 pitchcaps "-50 10 0"
+	$aagun_turret0 viewjitter 1
+	$aagun_turret0 firedelay 0.08
+	$aagun immune aagun
+
+	$flak88_turret0 turnspeed 15
+	$flak88_turret0 pitchspeed 7.5
+	$flak88_turret0 pitchcaps "-45 10 0"
+	$flak88_turret0 viewjitter 7
+	$flak88_turret0 firedelay 3
+
+	if (!level.mef_devmode && level.roundbased)
+	{
+		level waittill roundstart
+	}
+
+	thread start_generator_sound
+end
+
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end
+
+
+towthread:
+	exec global/tow_dm.scr
+	exec global/dm_ai.scr
+	exec global/friendly.scr
+
+	level.air_strike_thread = NULL
+	level.fire_attack_thread = NULL
+
+	setcvar "g_obj_alliedtext1" "Protect Ammo Depot"
+	setcvar "g_obj_alliedtext2" "Call In Air Support"
+	setcvar "g_obj_alliedtext3" "Control Radar Dish"
+	setcvar "g_obj_alliedtext4" "Shut Down Flak88's"
+	setcvar "g_obj_alliedtext5" "Detonate Axis Ammo Depot"
+
+	setcvar "g_obj_axistext1" "Protect Ammo Depot"
+	setcvar "g_obj_axistext2" "Start Flak88 Barrage"
+	setcvar "g_obj_axistext3" "Control Radar Dish"
+	setcvar "g_obj_axistext4" "Call Off Allied Air Support"
+	setcvar "g_obj_axistext5" "Destroy Allied Ammo Depot"
+	
+	//////////////////////////
+	level waittill prespawn
+	//////////////////////////
+	
+	waitthread global/libmef/tow.scr::copy_towobjective $Obj_alliesammodepot 1 5 5
+	waitthread global/libmef/tow.scr::copy_towobjective $Obj_axisammodepot 5 1 1
+
+	//////////////////////////
+	level waittill spawn
+	//////////////////////////
+
+	level.bRoundStarted			= 0
+
+	level.bArtillerySwitchUp	= 1
+	level.bAirStrikeSwitchUp	= 1
+	level.bRadarControlSwitchUp	= 1
+	level.axisFire				= 1
+	
+	// set the parameters for this round based match	
+//	level.dmrespawning			= 1				// 1 or 0
+	level.dmroundlimit			= 15			// round time limit in minutes
+	level.clockside				= draw			// set to axis, allies, kills, or draw
+	level.numObjectives			= 5				// Number of objectives needed to win
+
+
+	//////////////////////////
+	if (!level.mef_devmode)
+	{
+		level waittill roundstart
+	}
+	//////////////////////////		
+
+	thread init_switches
+	thread init_spawner_bombs
+	thread init_tower_lights
+
+	//Setup the starting team objectives	
+	thread set_objectives
+
+	level.bRoundStarted = 1
+end
+
+
+
+//----------------------------------------------------------
+//Sound for Radar Generator 
+//----------------------------------------------------------
+start_generator_sound:
+
+	$gen_sound_speaker loopsound sub_idle1
+
+end
+
+
+//----------------------------------------------------------
+//Destroy the allied spawner here
+//----------------------------------------------------------
+alliesammodepot local.planter:	
+	
+	iprintln "The Allied Ammo Depot has been destroyed!"
+
+	//Take over the objective
+	$Obj_alliesammodepot TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+
+	iprintln "The Allied Team can no longer respawn!"
+
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Destroy the axis spawner here
+//----------------------------------------------------------
+axisammodepot local.planter:
+	
+	iprintln "The Axis Ammo Depot has been destroyed!"
+	
+	$Obj_axisammodepot TakeOver 1	
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	iprintln "The Axis Team can no longer respawn!"
+
+	//Give the planter some points
+	if( local.planter != NULL && local.planter != NIL )
+	{
+		local.planter AddKills 5
+	}
+
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Turn on/off Flak88's
+//----------------------------------------------------------
+artillerystrike:	
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+	
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $Obj_artillerystrike.ControlledBy != 0 )
+			{			
+				//Flip the switch
+				thread artillerystrike_switch
+
+				$artillery_radio_speaker playsound radio_on
+
+				$Obj_artillerystrike TakeOver 0				
+				waitthread global/libmef/tow.scr::objective_captured axis
+				$tower_lights_02 show
+
+				//Call in the artillery strike		
+				thread call_artillery_strike
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have started artillery barrage!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $Obj_artillerystrike.ControlledBy != 1 )
+			{		
+				//Flip the switch
+				thread artillerystrike_switch
+
+				$artillery_radio_speaker playsound radio_off
+
+				$Obj_artillerystrike TakeOver 1				
+				waitthread global/libmef/tow.scr::objective_captured allies
+				$tower_lights_02 hide
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Allies have stopped artillery barrage!"
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+		
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Control Radar Dish
+//----------------------------------------------------------
+radarcontrol:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+	
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $Obj_radarcontrol.ControlledBy != 0 )
+			{		
+				//Flip the switch
+				thread radarcontrol_switch
+
+				$Obj_radarcontrol TakeOver 0
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have control of the Radar Station!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{		
+			if( $Obj_radarcontrol.ControlledBy != 1 )
+			{		
+				//Flip the switch
+				thread radarcontrol_switch
+
+				$Obj_radarcontrol TakeOver 1			
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Allies have control of the Radar Station!"	
+			}
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+		
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+//----------------------------------------------------------
+//Call on/off Airstrikes
+//----------------------------------------------------------
+airstrike:
+	if (parm.other.mef_spectator)
+	{
+		end
+	}
+
+	if( level.bRoundStarted == 1 )
+	{
+		if( parm.other.dmteam == axis )
+		{
+			if( $Obj_airstrike.ControlledBy != 0 )
+			{
+				//Take it over
+				$Obj_airstrike TakeOver 0				
+				waitthread global/libmef/tow.scr::objective_captured axis
+				
+				//Flip the switch
+				thread airstrike_switch
+
+				$airstrike_radio_speaker playsound radio_off
+
+				$tower_lights_01 hide
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+
+				iprintln "The Axis have called off Allied air support!"
+			}
+		}
+		else if( parm.other.dmteam == allies )
+		{
+			if( $Obj_airstrike.ControlledBy != 1 )
+			{
+				//Take it over
+				$Obj_airstrike TakeOver 1				
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				//Flip the switch
+				thread airstrike_switch
+
+				$airstrike_radio_speaker playsound radio_on
+				
+				$tower_lights_01 show
+
+				//call in the air strike
+				thread call_air_strike
+
+				//Give 2 points for taking objective
+				parm.other AddKills 2
+				
+				iprintln "The Allies have called in air support!"
+			}
+
+		}
+
+		//Did anyone win?
+		thread Check_End_Match
+		
+		//Update team current objectives
+		thread set_objectives
+	}
+
+end
+
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:	
+	
+	//First lets do the allies
+	if( $Obj_airstrike.ControlledBy == 0 )
+	{			
+		$Obj_airstrike SetCurrent 1
+	}	
+	else if( $Obj_radarcontrol.ControlledBy == 0 )
+	{
+		$Obj_radarcontrol SetCurrent 1
+	}
+	else if( $Obj_artillerystrike.ControlledBy == 0 )
+	{	
+		$Obj_artillerystrike SetCurrent 1
+	}
+	else if( $Obj_axisammodepot.ControlledBy == 0 )
+	{
+		$Obj_axisammodepot SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $Obj_artillerystrike.ControlledBy == 1 )
+	{			
+		$Obj_artillerystrike SetCurrent 0
+	}
+	else if( $Obj_radarcontrol.ControlledBy == 1 )
+	{
+		$Obj_radarcontrol SetCurrent 0
+	}
+	else if( $Obj_airstrike.ControlledBy == 1 )
+	{	
+		$Obj_airstrike SetCurrent 0
+	}
+	else if( $Obj_alliesammodepot.ControlledBy == 1 )
+	{
+		$Obj_alliesammodepot SetCurrent 0			
+	}	
+
+end
+
+//----------------------------------------------------------
+//Called when a player tries to open a locked door
+//----------------------------------------------------------
+doorlocked:
+
+	self playsound door_wood_locked1
+
+end
+
+//--------------------------------------------------------------
+//Init the switches
+//--------------------------------------------------------------
+init_switches:
+
+	$artillerystrike_switch bind $artillerystrike_origin
+	$airstrike_switch bind $airstrike_origin
+	$radarcontrol_switch bind $radarcontrol_origin
+
+	//Make the switches non solid so they don't hurt the player when triggered
+	$artillerystrike_switch notsolid
+	$artillerystrike_origin notsolid
+
+	$airstrike_switch notsolid
+	$airstrike_origin notsolid
+
+	$radarcontrol_switch notsolid
+	$radarcontrol_origin notsolid
+
+end
+
+
+//--------------------------------------------------------------
+//Turns On/Off Artillery Fire
+//--------------------------------------------------------------
+artillerystrike_switch:		
+	
+	if( level.bArtillerySwitchUp == 1 )
+	{			
+		$artillerystrike_origin speed 1.0
+		$artillerystrike_origin rotatexdownto 180
+		$artillerystrike_origin waitmove
+		$artillerystrike_origin playsound switchbox 
+		level.bArtillerySwitchUp = 0
+	}
+	else
+	{
+		$artillerystrike_origin rotatexupto 0
+		$artillerystrike_origin waitmove
+		level.bArtillerySwitchUp = 1
+	}	
+
+end
+
+//--------------------------------------------------------------
+//Turns On/Off Airstike bombs
+//--------------------------------------------------------------
+airstrike_switch:		
+	
+	if( level.bAirStrikeSwitchUp == 1 )
+	{	
+		$airstrike_origin speed 1.0
+		$airstrike_origin rotatexdownto 180
+		$airstrike_origin waitmove
+		$airstrike_origin playsound switchbox 
+		level.bAirStrikeSwitchUp = 0
+	}
+	else
+	{
+		$airstrike_origin rotatexupto 0
+		$airstrike_origin waitmove
+		level.bAirStrikeSwitchUp = 1
+	}	
+
+end
+
+//--------------------------------------------------------------
+//Take control fo Radar for more explosions
+//--------------------------------------------------------------
+radarcontrol_switch:		
+	
+	if( level.bRadarControlSwitchUp == 1 )
+	{	
+		$radarcontrol_origin speed 1.0
+		$radarcontrol_origin rotatexdownto 180
+		$radarcontrol_origin waitmove
+		$radarcontrol_origin playsound switchbox 
+		level.bRadarControlSwitchUp = 0
+	}
+	else
+	{
+		$radarcontrol_origin rotatexupto 0
+		$radarcontrol_origin waitmove
+		level.bRadarControlSwitchUp = 1
+	}	
+
+end
+
+//--------------------------------------------------------------
+//init the spawner bombs
+//--------------------------------------------------------------
+init_spawner_bombs:
+
+	//Allied spawner bomb
+	$gmc_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_Berlin_TOW.scr::alliesammodepot
+
+	$mg42_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_Berlin_TOW.scr::axisammodepot
+
+	//Allied bomb (Bridge, not a spawner bomb)
+	$bridge_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_Berlin_TOW.scr::bridge_bomb_relay_explode
+
+	//Axis bomb (Archway, not a spawner bomb)
+	$archway_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_Berlin_TOW.scr::archway_bomb_relay_explode
+end
+
+//-----------------------------------------------
+// Blow up the truck (Allied Spawner)
+//-----------------------------------------------
+truck_bomb_relay_explode:
+
+	self waittill trigger
+	thread alliesammodepot	
+
+end
+
+//-----------------------------------------------
+// Blow up the MG42 (Axis Spawner)
+//-----------------------------------------------
+mg42_bomb_relay_explode:
+	
+	self waittill trigger
+	thread axisammodepot
+
+end
+
+//-----------------------------------------------
+// Blow up the bridge (Allied path reduce)
+//-----------------------------------------------
+bridge_bomb_relay_explode:
+
+	thread global/exploder.scr::explode 199
+
+end
+
+//-----------------------------------------------
+// Blow up the archway (Axis path reduce)
+//-----------------------------------------------
+archway_bomb_relay_explode:
+	
+	thread global/exploder.scr::explode 8
+	
+end
+
+//-----------------------------------------------
+// Call in the artillery strike
+//-----------------------------------------------
+call_artillery_strike:
+	
+	if( level.fire_attack_thread != NIL && level.fire_attack_thread != NULL )
+	{	
+		end
+	}
+
+	level.fire_attack_thread = local
+	
+	while( $Obj_artillerystrike.ControlledBy == 0 )
+	{	
+		local.rand = randomint $flak_axis_boom.size
+		if( local.rand <= 0 )
+		{
+			local.rand++
+		}
+		
+		local.ent = spawn models/projectiles/Berlin_Bombs.tik origin $flak_axis_boom[local.rand].origin
+		local.ent explode
+
+		//Delay between explosions
+		wait 2
+	}
+
+	level.fire_attack_thread = NULL
+
+end
+
+//-----------------------------------------------
+// Call in the allied air strike
+//-----------------------------------------------
+call_air_strike:
+	
+	if( level.air_strike_thread != NIL && level.air_strike_thread != NULL )
+	{	
+		end
+	}
+
+	level.air_strike_thread = local
+
+	while( $Obj_airstrike.ControlledBy == 1 )
+	{
+		//Plane 1 flypath
+		local.rand = randomint 3
+ 		switch( local.rand )
+		{
+			//local.flypath is the path the plane will follow
+			//local.wait is the delay  before it drops it's bombs 
+			case 0:				
+				local.flypath = $plane_path1
+				local.wait = randomfloat 1.0
+				local.wait += 2
+				wait local.wait
+				break;
+
+			case 1:
+				local.flypath = $plane_path2
+				local.wait = randomfloat 1.0
+				local.wait += 2
+				wait local.wait
+				break;
+
+			case 2:
+				local.flypath = $plane_path3
+				local.wait = randomfloat 1.0
+				local.wait += 2
+				wait local.wait
+				break;
+
+			case 3:
+				local.flypath = $plane_path4
+				local.wait = randomfloat 1.0
+				local.wait += 2
+				wait local.wait
+				break;
+		}
+
+		//Plane 2 flypath		
+		local.rand2 = randomint 3
+		
+		//Make sure we get a different path.
+		while( local.rand2 == local.rand )
+		{
+			local.rand2 = randomint 3
+		}
+
+		switch( local.rand2 )
+		{
+			//local.flypath2 is the path the plane will follow
+			//local.wait2 is the delay  before it drops it's bombs
+
+			case 0:
+				local.flypath2 = $plane_path1
+				local.wait2 = randomfloat 1.0
+				local.wait2 += 2
+				wait local.wait2
+				break;
+
+			case 1:
+				local.flypath2 = $plane_path2
+				local.wait2 = randomfloat 1.0
+				local.wait2 += 2
+				wait local.wait2
+				break;
+
+			case 2:
+				local.flypath2 = $plane_path3
+				local.wait2 = randomfloat 1.0
+				local.wait2 += 2
+				wait local.wait2
+				break;
+
+			case 3:
+				local.flypath2 = $plane_path4
+				local.wait2 = randomfloat 1.0
+				local.wait2 += 2
+				wait local.wait2
+				break;
+		}
+
+		thread spawn_plane "Plane1" "Plane1_bomb" "Plane1_bomb2" local.flypath local.wait
+
+		if( $Obj_radarcontrol.ControlledBy == 1 )
+		{
+			wait 1
+			thread spawn_plane "Plane2" "Plane2_bomb" "Plane2_bomb2" local.flypath2 local.wait2
+		}
+		
+		//How long between plane runs
+		wait 15
+	}
+
+	level.air_strike_thread = NULL
+
+end
+
+
+//-----------------------------------------------
+// Spawn in a plane
+//-----------------------------------------------
+spawn_plane local.planeName local.bombName local.bombName2 local.flypath local.wait:
+
+	if ( ( local.planeName == "Plane1" ) && ( $Plane1 != NULL ) )
+		end
+	if ( ( local.planeName == "Plane2" ) && ( $Plane2 != NULL ) )
+		end
+
+	//spawn the plane in and start flying over the target
+	spawn script_model model models/vehicles/yak_7b.tik "$targetname" local.planeName origin local.flypath.origin		
+	local.planeName followpath local.flypath 2500 2000 256				
+	local.planeName playsound plane
+	local.planeName move
+	local.planeName notsolid
+
+	wait local.wait
+	
+	spawn models/projectiles/Berlin_Bombs.tik "$targetname" local.bombName origin local.flypath.origin 
+	local.bombName becomebomb local.planeName		
+	local.bombName model "ammo/us_bomb.tik"
+	local.bombName show
+
+	//Delay slightly before dropping the second bomb
+	wait 0.2
+	
+	spawn models/projectiles/Berlin_Bombs.tik "$targetname" local.bombName2 origin local.flypath.origin 
+	local.bombName2 becomebomb local.planeName
+	local.bombName2 model "ammo/us_bomb.tik"
+	local.bombName2 show
+	
+	local.planeName waitmove
+	local.planeName remove
+
+end
+
+
+
+//----------------------------------------------------------
+//Initialize the tower lights
+//----------------------------------------------------------
+init_tower_lights:
+
+	$tower_lights_01 hide
+	$tower_lights_02 hide
+
+end
+
+//----------------------------------------------------------
+FacingFix:
+//
+//
+//	jsl--> Make the axis face the correct way...
+//----------------------------------------------------------
+
+	self angles "0 0 0"
+
+	end
+
+
+//----------------------------------------------------------
+//	Allies are enemyspawners with #set 20 with a leader #set 25
+//	Axis are enemyspawners with #set 10 with a leader #set 15
+//	all spawners are targeting info_pathnodes
+//	2 cameras placed $targetname alliewincamera_1 & alliewincamera_2
+//----------------------------------------------------------
+win_game_allie:
+	
+	// implemented to end the oppression of the cinematic, JP
+	level.cinematic = getcvar(g_cinematics_off)
+
+	if(level.cinematic == "1") // if 1 then it means you want it off
+	{
+		$player nodamage
+		$player hide
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+	//hide and freeze the players
+	$player nodamage
+	$player hide
+	freezeplayer
+	
+	//spawn the allies	
+	waitthread global/dm_ai.scr::spawnset 20 set20
+	waitthread global/dm_ai.scr::spawnset 25 cappy
+
+	//spawn the axis	
+	waitthread global/dm_ai.scr::spawnset 10 set10
+	waitthread global/dm_ai.scr::spawnset 15 set15
+
+	$set10 waitthread FacingFix
+	$set15 waitthread FacingFix
+
+	for( local.i = 1; local.i <= $set10.size; local.i++ )
+	{
+		$set10[local.i] thread Do_Loser_End 
+	}
+
+	$set15 thread Do_Loser_End
+
+	//Turn on the winning music	
+	forcemusic aux2 aux2
+
+	//Turn off the hud for the movie
+	drawhud 0
+	level.mef_hidehud = 1
+
+	$alliewincamera_1 watch $alliewincamera_2
+	$alliewincamera_1 cut
+	cuecamera $alliewincamera_1
+
+	wait 3
+
+	for( local.i = 1; local.i <= $set20.size; local.i++ )
+	{	
+		local.rand = randomfloat .5
+		local.rand += .5
+		
+		if( local.i <= $set10.size )
+		{
+			$set20[local.i] thread Do_Winner_End local.rand $set10[local.i]
+		}
+		else
+		{
+			$set20[local.i] thread Do_Winner_End local.rand NULL
+		}
+	}
+
+	$cappy thread Do_Winner_Allied_Cappy_End 5 $set15
+	
+end
+
+//----------------------------------------------------------
+//	Allies are enemyspawners with #set 30 with a leader #set 35
+//	Axis are enemyspawners with #set 40 with a leader #set 45
+//	all spawners are targeting info_pathnodes
+//	2 cameras placed $targetname axiswincamera_1 & axiswincamera_2
+//----------------------------------------------------------
+win_game_axis:
+
+	// implemented to end the oppression of the cinematic, JP
+	level.cinematic = getcvar(g_cinematics_off)
+
+	if(level.cinematic == "1") // if 1 then it means you want it off
+	{
+		$player nodamage
+		$player hide
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+
+	//hide and freeze the players
+	$player nodamage
+	$player hide
+	freezeplayer
+
+	//spawn the axis	
+	waitthread global/dm_ai.scr::spawnset 40 set40
+	waitthread global/dm_ai.scr::spawnset 45 cappy
+
+	//spawn the allies	
+	waitthread global/dm_ai.scr::spawnset 30 set30
+	waitthread global/dm_ai.scr::spawnset 35 set35
+
+	drawhud 0
+	level.mef_hidehud = 1
+	
+	//Start the music
+	forcemusic aux4 aux4
+	
+	$axiswincamera_1 speed .3
+	$axiswincamera_1 fov 70
+	$axiswincamera_1 follow $axiswincamera_spline $axiswincamera_target	
+	$axiswincamera_1 cut 
+	cuecamera $axiswincamera_1	
+
+	wait 2.0
+
+	//Run the winner threads
+	for( local.i = 1; local.i <= $set40.size; local.i++ )
+	{	
+		local.rand = randomfloat 3.0
+		local.rand += 2.5
+		
+		if( local.i <= $set30.size )
+		{
+			$set40[local.i] thread Do_Winner_End local.rand $set30[local.i]
+		}
+		else
+		{
+			$set40[local.i] thread Do_Winner_End local.rand NULL
+		}
+	}
+
+	//run the winners captain thread
+	$cappy thread Do_Winner_Axis_Cappy_End 5 $set35
+
+	wait 1
+
+	//run the losers threads
+	for( local.i = 1; local.i <= $set30.size; local.i++ )
+	{
+		$set30[local.i] thread Do_Allie_Loser_End 
+	}
+
+	$set35 thread Do_Allie_Loser_End	
+
+
+end
+
+
+//----------------------------------------------------------
+//Do the winner anims and stuff
+//----------------------------------------------------------
+Do_Winner_End local.wait local.target:
+	
+	self nodamage
+	self runto self.target
+
+	wait local.wait
+
+	self fire
+	
+	if( local.target != NULL )
+	{
+		local.target takedamage
+		local.target damage NULL 1000 NULL (0 0 0) (0 0 0) (0 0 0) 0 9 0 0
+	}
+
+end
+
+//----------------------------------------------------------
+//Do the winners captain end sequence
+//----------------------------------------------------------
+Do_Winner_Allied_Cappy_End local.wait local.target:
+	// implemented to end the oppression of the cinematic, JP
+	level.cinematic = getcvar(g_cinematics_off)
+
+	if(level.cinematic == "1") // if 1 then it means you want it off
+	{
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+
+	self nodamage
+	self runto self.target
+
+	local.rand = randomfloat 1.5
+	local.rand += .5
+
+	self fire
+
+	level.axisFire = 0
+	
+	if( local.target != NULL )
+	{
+		local.target takedamage
+		local.target damage NULL 1000 NULL (0 0 0) (0 0 0) (0 0 0) 0 9 0 0
+	}
+
+	wait 3.5
+	
+	$alliewincamera_2 watch $cappy
+	$alliewincamera_2 fov 40
+	$alliewincamera_2 cut
+	cuecamera $alliewincamera_2
+
+	wait 2
+	
+	dprintln "Playing Cappy end anim"
+	self anim 00A001_victory	
+
+	wait 2
+	
+	//Allies have won
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	//fade out the music
+	forcemusic aux3 aux3
+
+	wait 5
+
+end
+
+
+//----------------------------------------------------------
+//Do the winners captain end sequence
+//----------------------------------------------------------
+Do_Winner_Axis_Cappy_End local.wait local.target:
+	
+	// implemented to end the oppression of the cinematic, JP
+	level.cinematic = getcvar(g_cinematics_off)
+
+	if(level.cinematic == "1") // if 1 then it means you want it off
+	{
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+
+	
+	self nodamage
+	self runto self.target
+
+	wait local.wait
+
+	self fire
+	
+	if( local.target != NULL )
+	{
+		local.target takedamage
+		local.target damage NULL 1000 NULL (0 0 0) (0 0 0) (0 0 0) 0 9 0 0
+	}
+	
+	wait 5
+	
+	self anim 00A001_victory	
+	
+	//Axis have won
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+	//fade out the music
+	forcemusic aux5 aux5
+
+	wait 5
+
+end
+
+
+//----------------------------------------------------------
+//Axis end, they fire and die
+//----------------------------------------------------------
+Do_Loser_End:
+
+	self nodamage
+	self aimat $airstrike_origin
+	
+	//self runto self.target
+	while ( level.axisFire == 1 )
+	{
+		local.delay = randomfloat 1.5
+		local.delay += .5
+
+		wait local.delay
+		self fire
+	}
+
+end
+
+//----------------------------------------------------------
+//Allies run away
+//----------------------------------------------------------
+Do_Allie_Loser_End:
+
+	self nodamage
+	self runto self.target
+
+end
+
+//-----------------------------------------------
+// init the objectives
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAxis		= 0
+	local.nAllied	= 0
+
+	//Allied ammo depot
+	if( $Obj_alliesammodepot.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	else if( $Obj_alliesammodepot.ControlledBy == 1 )
+	{
+		local.nAllied++
+	}
+
+	//Axis ammo depot
+	if( $Obj_axisammodepot.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	else if( $Obj_axisammodepot.ControlledBy == 1 )
+	{
+		local.nAllied++
+	}
+
+	//Artillery Strike
+	if( $Obj_artillerystrike.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	else if( $Obj_artillerystrike.ControlledBy == 1 )
+	{
+		local.nAllied++
+	}
+
+	//Radar
+	if( $Obj_radarcontrol.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	else if( $Obj_radarcontrol.ControlledBy == 1 )
+	{
+		local.nAllied++
+	}
+
+	//Air strike
+	if( $Obj_airstrike.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	else if( $Obj_airstrike.ControlledBy == 1 )
+	{
+		local.nAllied++
+	}
+	
+	//Allies first
+	if( local.nAllied == level.numObjectives )
+	{
+		//Only show the movie if the wingame cvar has not been set yet.
+		local.winstate = int( getcvar( g_TOW_winstate ) )
+		if( local.winstate == 0 )
+		{
+			setcvar "g_TOW_winstate" "1"
+
+			//ignore the clock
+			level ignoreclock 1
+			level.mef_gameover = 1
+
+			//if there is a bomb ticking stop it.
+			waitthread global/libmef/bomb.scr::StopBomb
+
+			//Allies win play the movie
+			thread win_game_allie		
+		}
+	}
+	else if( local.nAxis == level.numObjectives )
+	{
+		//Only show the movie if the wingame cvar has not been set yet.
+		local.winstate = int( getcvar( g_TOW_winstate ) )
+		if( local.winstate == 0 )
+		{
+			setcvar "g_TOW_winstate" "1"
+
+			//ignore the clock
+			level ignoreclock 1
+			level.mef_gameover = 1
+
+			//if there is a bomb ticking stop it.
+			waitthread global/libmef/bomb.scr::StopBomb
+
+			//Axis win do their movie and end the map
+			thread win_game_axis
+		}
+	}
+
+end
+

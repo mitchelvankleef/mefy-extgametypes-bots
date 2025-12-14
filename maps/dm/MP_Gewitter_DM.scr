@@ -1,0 +1,89 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for CTF base positions
+
+main:
+
+// set scoreboard messages
+setcvar "g_obj_alliedtext1" "Gewitter"
+setcvar "g_obj_alliedtext2" "Contest Winner"
+setcvar "g_obj_alliedtext3" "By Rungsi"
+setcvar "g_obj_axistext1" ""
+setcvar "g_obj_axistext2" ""
+setcvar "g_obj_axistext3" ""
+
+setcvar "g_scoreboardpic" "mp_gewitter_dm.tga"
+
+	level.mef_mapname = "mp_gewitter_dm"
+	level.mef_maptype = "dm"
+	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
+	level.mef_defaultgametype = "ft"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+			// CTF Base positions by Kaotik
+			waitthread global/libmef/bases.scr::addbasepair "2536.83 1395.68 144.13 180 Allied Manor" "-3936.87 963.85 256.13 0 Axis Manor"
+			waitthread global/libmef/bases.scr::addbasepair "1400.87 2399.72 8.13 180 NW Sector" "-2288.87 502.37 -5.36 0 SE Sector"
+			thread global/libmef/ctf.scr::ctf_begin
+			break
+
+		case "ft":
+			thread global/libmef/ft.scr::ft_begin
+			break
+
+		case "rbm":
+			thread roundbasedthread
+			break
+	}
+		
+	level.script = maps/dm/mp_gewitter_dm.scr
+	level.music = mp_gewitter_dm	
+	exec global/dmprecache.scr mp_gewitter_dm
+	exec global/weather.scr 
+	exec global/ambient.scr 
+	exec global/door_locked.scr
+
+	$granatwerfer.collisionent = $granatwerfer_collision
+	$granatwerfer_turret0.collisionent = $granatwerfer_turret_collision
+	if (!level.mef_removeturrets)
+	{
+		$granatwerfer thread global/stationaryweapons.scr::MountedStationaryWeaponWithCollision "models/statweapons/p_granatwerfer_d.tik" $granatwerfer_destroyed_collision
+	}
+
+	level waitTill prespawn
+
+	level waittill spawn
+
+	$world farplane_bias 250
+
+
+
+
+end
+
+//-----------------------------------------------------------------------------
+
+roundbasedthread:
+
+	// Can specify different scoreboard messages for round based games here.
+	
+	level waitTill prespawn
+
+	level waittill spawn
+
+	// set the parameters for this round based match
+	level.dmrespawning = 0 // 1 or 0
+//	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+
+	level waittill roundstart
+
+end
