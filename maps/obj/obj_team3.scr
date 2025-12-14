@@ -2,7 +2,7 @@
 // BY ADAM "SENN" BELLEFEUIL
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -20,39 +20,17 @@ main:
 
 	setcvar "g_scoreboardpic" "objdm5"
 
-	level.mef_mapname = "obj_team3"
-	level.mef_maptype = "obj"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"obj"::"ft"::"ctf"::"ftobj"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ftobj"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "ftobj":
-			thread global/libmef/ft.scr::ft_begin
-			thread objectivethread
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 
 		case "obj":
+		case "ftobj":
 			thread objectivethread
 			break
 	}
@@ -108,35 +86,17 @@ main:
 	exec global/ambient.scr obj_team5
 
 	level waittill spawn
-	$world farclipoverride -1
-
-	if (!level.mef_devmode && level.roundbased)
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
 	{
-		level waittill roundstart
+		$world commanddelay 0 farclipoverride -1
 	}
+
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	if (level.mef_gametype != "ft" && level.mef_gametype != "rbm")
 	{
 		thread random_explode_setup
 	}
-end
-
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
 end
 
 
@@ -149,14 +109,14 @@ setup_bases:
 
 	// common bases for dem and ctf
 	waitthread global/libmef/bases.scr::addbasepair "733 -1248 -503.88 -90 Allied Ammo Crate" "1334 1127 64.13 -31 Axis Cable Spool" indycrate cablespool
-	waitthread global/libmef/bases.scr::addbasepair "-862.58 -3072.64 -427.31 130 Sherman Tank" "1609 -319 256.13 -90 West Bunker" shermantank cardtable ( 3 130 7 )
-	waitthread global/libmef/bases.scr::addbasepair "2261.73 -3038.84 -383.32 100 Sherman Tank" "-1123 -702 256.13 -90 East Bunker" shermantank cardtable ( 0 100 3 )
+	waitthread global/libmef/bases.scr::addbasepair "-862.58 -3072.64 -427.31 130 East Sherman Tank" "1609 -319 256.13 -90 West Bunker" shermantank cardtable ( 3 130 7 )
+	waitthread global/libmef/bases.scr::addbasepair "2261.73 -3038.84 -383.32 100 West Sherman Tank" "-1123 -702 256.13 -90 East Bunker" shermantank cardtable ( 0 100 3 )
 
 	// deep bases
-	if (level.mef_deepbases)
+	if ((level.mef_gametype == "dem" || level.mef_gametype == "ftdem") && level.mef_deepbases)
 	{
-		waitthread global/libmef/bases.scr::addbasepair "1563 -5070 -480.84 90 Higgins Boat" "-1110 1575 450 135 East Cannon" higginsboat 15cmcannon
-		waitthread global/libmef/bases.scr::addbasepair "-113 -5026 -477.99 90 Higgins Boat" "2432 1365 451 45 West Cannon" higginsboat 15cmcannon
+		waitthread global/libmef/bases.scr::addbasepair "1563 -5070 -480.84 90 West Higgins Boat" "-1110 1575 450 135 East Cannon" higginsboat 15cmcannon
+		waitthread global/libmef/bases.scr::addbasepair "-113 -5026 -477.99 90 East Higgins Boat" "2432 1365 451 45 West Cannon" higginsboat 15cmcannon
 	}
 	
 	// additional bases for ctf only
@@ -209,10 +169,7 @@ objectivethread:
 	level.dmroundlimit = 10 // round time limit in minutes
 	level.clockside = axis // set to axis, allies, kills, or draw
 
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	$88mm_explosive1 thread global/libmef/bomb.scr::bomb_thinker
 	$88mm_explosive2 thread global/libmef/bomb.scr::bomb_thinker
@@ -247,13 +204,7 @@ allies_win_bomb:
 	while(level.targets_destroyed < level.targets_to_destroy)
 		waitframe
 	
-	if (level.mef_gametype == "ftobj")
-	{
-		waitthread global/libmef/util.scr::do_teamwin allies
-	} else
-	{
-		teamwin allies
-	}
+	waitthread global/libmef/util.scr::do_teamwin allies
 end
 
 

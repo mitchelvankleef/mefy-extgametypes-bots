@@ -2,9 +2,9 @@
 ================================================================================
 Server-Side Demolition Gametype Library
 for Medal Of Honor
-Version 1.2.7 (11/15/04)
+Version 1.3.2 (05/14/05)
 
-Copyright (c) 2003-2004 Mark Follett
+Copyright (c) 2003-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,12 +28,85 @@ SOFTWARE.
 */
 
 
+register_gametypes:
+	level.mef_gametypes["dem"] = global/libmef/dem.scr::init_gametype
+	level.mef_gametypes["ftdem"] = global/libmef/dem.scr::init_gametype
+end
+
+
+init_gametype:
+	switch (self.gametype)
+	{
+		case "dem":
+			self.gametypestring = "Demolition"
+			break
+		
+		case "ftdem":
+			self.gametypestring = "Freeze-Tag-Demolition"
+			break
+	}
+	
+	if (level.mef_maptype == "obj")
+	{
+		self.basegametype = 4
+	} else
+	{
+		self.basegametype = 3
+	}
+
+	waitthread global/libmef/gametypes.scr::new_setting "settime"       int 50
+	waitthread global/libmef/gametypes.scr::new_setting "defusetime"    int 35
+	waitthread global/libmef/gametypes.scr::new_setting "ticktime"      int 45
+	waitthread global/libmef/gametypes.scr::new_setting "activatedelay" int 20
+	waitthread global/libmef/gametypes.scr::new_setting "attacker"      string "both"
+	waitthread global/libmef/gametypes.scr::new_setting "suddendeath"   int  1
+	waitthread global/libmef/gametypes.scr::new_setting "secretbases"   bool 0
+	
+	waitthread global/libmef/util.scr::add_logging_settings
+
+	if (self.gametype == "dem")
+	{
+		waitthread global/libmef/gametypes.scr::new_setting "respawn" bool 0
+	}
+
+	if (self.gametype == "ftdem")
+	{
+		waitthread global/libmef/ft.scr::add_freezetag_settings
+	}
+
+	waitthread global/libmef/gametypes.scr::add_roundbased_settings
+	waitthread global/libmef/spectate.scr::add_spectate_settings
+	waitthread global/libmef/respawn.scr::add_respawncontrol_settings
+
+	self.settingsthread = global/libmef/dem.scr::process_settings
+	
+	thread dem_begin
+end
+
+
+process_settings:
+	if (level.mef_gametype == "ftdem" || (level.mef_gametype == "dem" && !level.mef_settings["respawn"]))
+	{
+		level.mef_deepbases = 1
+	}
+	waitthread global/libmef/spectate.scr::process_settings
+end
+
+
 dem_begin:
+	if (level.dem_running)
+	{
+		end
+	}
+
 	level.dem_running = 1
-	level.dem_version = "1.2.7"
-	setcvar "g_dem_version" level.dem_version
+
+	level waittill prespawn
+
+	level.dem_version = "1.3.2"
 
 	waitthread global/libmef/util.scr::read_gametype_settings
+	thread global/libmef/respawn.scr::respawncontrol_thread
 
 	// bomb settings
 	level.bomb_defuse_time = level.mef_settings["defusetime"]
@@ -72,26 +145,21 @@ dem_begin:
 	{
 		if (level.mef_settings["respawn"])
 		{
-			level.mef_dmrespawning = 1
-			level.mef_allies.respawn = 1
-			level.mef_axis.respawn = 1
+			level.mef_respawnmode = "full"
 		} else
 		{
-			level.mef_dmrespawning = 0
-			level.mef_allies.respawn = 0
-			level.mef_axis.respawn = 0
+			level.mef_respawnmode = "none"
 		}
 		local.gtypename = "Demolition"
 	} else
 	{
-		level.mef_dmrespawning = 0
+		level.mef_respawnmode = "ft"
 		level.mef_freezemode = 1
-		level.mef_allies.respawn = 0
-		level.mef_allies.freezemode = 1
-		level.mef_axis.respawn = 0
-		level.mef_axis.freezemode = 1
 		local.gtypename = "Freeze-Tag-DEM"
 	}
+
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_allies level.mef_respawnmode 0
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_axis level.mef_respawnmode 0
 
 	level.dem_basesx = 10
 	level.dem_basesy = -140
@@ -101,11 +169,11 @@ dem_begin:
 
 	if (level.dem_attacker == "both")
 	{
-		level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_doubleobj
+		level.mef_checkwinthread = global/libmef/dem.scr::get_winner_doubleobj
 		level.mef_pchudy = -200
 	} else
 	{
-		level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_obj
+		level.mef_checkwinthread = global/libmef/dem.scr::get_winner_obj
 		level.mef_pchudy = -175
 	}
 
@@ -119,15 +187,13 @@ dem_begin:
 	level.mef_credits[4] = "mefy"
 	level.mef_credits[5] = ""
 
-	if (level.mef_maptype == "obj")
+	if (level.mef_basegametype == 4)
 	{
-		level.mef_basegametype = 4 // Objective-Match
 		setcvar "g_obj_axistext1" (local.gtypename + " MOD")
 		setcvar "g_obj_axistext2" "by Mefy"
 		setcvar "g_obj_axistext3" ""
 	} else
 	{
-		level.mef_basegametype = 3 // Round-Based-Match
 		setcvar "g_obj_axistext1" ""
 		setcvar "g_obj_axistext2" (local.gtypename + " MOD")
 		setcvar "g_obj_axistext3" "by Mefy"
@@ -150,13 +216,9 @@ dem_begin:
 		setcvar "g_obj_alliedtext3" ""
 	}
 
-	setcvar "g_gametype" level.mef_basegametype
-
 	waitthread global/libmef/mapdesc.scr::setup_map level.mef_mapname
 
 	level.dem_bases = waitthread global/libmef/bases.scr::read_base_settings level.mef_settings level.dem_defender
-
-	level waittill prespawn
 
 	if (level.dem_attacker == "both")
 	{
@@ -187,10 +249,7 @@ dem_begin:
 
 	level waittill spawn
 	
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	while (!level.mef_basesspawned)
 	{
@@ -199,8 +258,8 @@ dem_begin:
 	
 	if (level.dem_attacker == "both")
 	{
-		level.dem_bombs["axis"] = waitthread setup_base level.dem_bases["allies"] "axis" level.dem_bmeterx level.dem_bmetery level.dem_basesx (level.dem_basesy + 25)
-		level.dem_bombs["allies"] = waitthread setup_base level.dem_bases["axis"] "allies" (level.dem_bmeterx + 20) level.dem_bmetery level.dem_basesx level.dem_basesy
+		level.dem_bombs["axis"] = waitthread setup_base level.dem_bases["allies"] "axis" level.dem_bmeterx level.dem_bmetery level.dem_basesx level.dem_basesy
+		level.dem_bombs["allies"] = waitthread setup_base level.dem_bases["axis"] "allies" (level.dem_bmeterx + 20) level.dem_bmetery level.dem_basesx (level.dem_basesy + 25)
 	} else
 	{
 		level.dem_bombs[level.dem_attacker] = waitthread setup_base level.dem_bases[level.dem_defender] level.dem_attacker level.dem_bmeterx level.dem_bmetery level.dem_basesx (level.dem_basesy + 25)
@@ -213,7 +272,7 @@ dem_begin:
 	local.sdmins = 0
 	local.autonuke = 0
 	
-	if ((level.mef_dmrespawning || level.mef_freezemode) && level.mef_settings["suddendeath"] > 0)
+	if (level.mef_respawnmode != "none" && level.mef_settings["suddendeath"] > 0)
 	{
 		local.sdmins = level.mef_settings["suddendeath"]
 	}
@@ -225,7 +284,7 @@ dem_begin:
 
 		waitthread global/libmef/util.scr::turn_off_clock
 
-		if (!level.mef_dmrespawning || local.sdmins > 0)
+		if (level.mef_respawnmode != "full" || local.sdmins > 0)
 		{
 			local.autonuke = 1
 		}
@@ -247,31 +306,22 @@ dem_begin:
 end
 
 
-read_game_settings:
-	local.settingsdef[0] = "settime"::int::50    //tenths of a second
-	local.settingsdef[1] = "defusetime"::int::35 //tenths of a second
-	local.settingsdef[2] = "ticktime"::int::45   //seconds
-	local.settingsdef[3] = "activatedelay"::int::20 // seconds till bombs are activated
-	local.settingsdef[4] = "attacker"::string::"both" // the attacking team
-	local.settingsdef[5] = "suddendeath"::int::1 // minutes of sudden death
-
-	if (level.mef_gametype == "dem")
-	{
-		local.settingsdef[6] = "respawn"::bool::0 // allow respawning
-	}
-
-	if (level.mef_gametype == "ftdem")
-	{
-		waitthread global/libmef/ft.scr::append_ft_settingsdef local.settingsdef
-	}
-
-	waitthread global/libmef/util.scr::read_game_settings level.mef_settings local.settingsdef
-end
-
-
 setup_base local.base local.team local.meterx local.metery local.basex local.basey:
 	local.bomb = waitthread global/libmef/bomb.scr::new_bomb local.base.bomborg local.base.bombang local.team
-	local.bomb.desc = local.base.desc
+
+	if (local.base.desc != "")
+	{
+		local.bomb.desc = local.base.desc
+	} else
+	{
+		local.bomb.desc = level.mef_team[local.base.team].desc + " Base"
+	}
+
+	if (level.mef_settings["secretbases"])
+	{
+		local.bomb.hidden = 1
+		local.bomb.set_thread = global/libmef/dem.scr::reveal_bomb
+	}
 
 	local.bomb.trigger_name nottriggerable
 	local.bomb hide
@@ -283,6 +333,11 @@ setup_base local.base local.team local.meterx local.metery local.basex local.bas
 	thread check_bomb_status local.bomb 1.5
 	waitthread init_base_display local.base.team local.bomb local.basex local.basey
 end local.bomb
+
+
+reveal_bomb:
+	self.hidden = 0
+end
 
 
 activate_bomb local.bomb:
@@ -412,6 +467,134 @@ check_bombs_exploded:
 		}
 	}
 end
+
+
+get_winner_obj:
+	local.rbwinner = waitthread global/libmef/respawn.scr::get_winner_rb
+
+	if (local.rbwinner == NIL && level.mef_timeexpired && level.bombs_planted <= 1)
+	{
+		local.rbwinner = waitthread global/libmef/util.scr::parse_clockside level.clockside
+	}
+
+	local.targets_notset = level.targets_to_destroy - level.targets_destroyed - level.bombs_planted + 1
+
+	if (local.rbwinner == "draw")
+	{
+		if (local.targets_notset <= 0)
+		{
+			local.winner = level.planting_team
+		} else
+		{
+			local.winner = "draw"
+		}
+	} else if (local.rbwinner == "allies")
+	{
+		if (level.planting_team == "axis" && local.targets_notset <= 0)
+		{
+			local.announcebomb = 1
+		} else
+		{
+			local.winner = "allies"
+		}
+	} else if (local.rbwinner == "axis")
+	{
+		if (level.planting_team == "allies" && local.targets_notset <= 0)
+		{
+			local.announcebomb = 1
+		} else
+		{
+			local.winner = "axis"
+		}
+	}
+
+	if (local.announcebomb && !level.mef_announcedbomb && !level.mef_timeexpired)
+	{
+		iprintlnbold_noloc "A bomb is still set!"
+		level.mef_announcedbomb = 1
+	}
+end local.winner
+
+
+get_winner_doubleobj:
+	local.rbwinner = waitthread global/libmef/respawn.scr::get_winner_rb
+
+	if (local.rbwinner == NIL && level.mef_timeexpired)
+	{
+		local.rbwinner = "draw"
+	}
+
+	if (level.mef_allies.dead || level.mef_axis.dead)
+	{
+		if (local.rbwinner == "draw")
+		{
+			if (level.dem_bombsblown == "none")
+			{
+				if (level.dem_bombs["allies"].live && level.dem_bombs["axis"].live)
+				{
+					if (level.dem_bombs["allies"].timeleft < level.dem_bombs["axis"].timeleft)
+					{
+						local.winner = "allies"
+					} else if (level.dem_bombs["axis"].timeleft < level.dem_bombs["allies"].timeleft)
+					{
+						local.winner = "axis"
+					} else
+					{
+						local.winner = "draw"
+					}
+				} else if (level.dem_bombs["allies"].live)
+				{
+					local.winner = "allies"
+				} else if (level.dem_bombs["axis"].live)
+				{
+					local.winner = "axis"
+				} else
+				{
+					local.winner = "draw"
+				}
+			} else if (level.dem_bombsblown == "both")
+			{
+				local.winner = "draw"
+			} else
+			{
+				local.winner = level.dem_bombsblown
+			}
+		} else if (local.rbwinner == "allies")
+		{
+			if (level.dem_bombsblown == "none" && level.dem_bombs["axis"].live && !level.dem_bombs["allies"].live)
+			{
+				local.announcebomb = 1
+			} else
+			{
+				local.winner = "allies"
+			}
+		} else if (local.rbwinner == "axis")
+		{
+			if (level.dem_bombsblown == "none" && level.dem_bombs["allies"].live && !level.dem_bombs["axis"].live)
+			{
+				local.announcebomb = 1
+			} else
+			{
+				local.winner = "axis"
+			}
+		}
+	} else if (local.rbwinner != NIL)
+	{
+		if (level.bombs_planted > 1)
+		{
+			local.announcebomb = 1
+		} else
+		{
+			local.winner = local.rbwinner
+		}
+	}
+
+	if (local.announcebomb && !level.mef_announcedbomb && !level.mef_timeexpired)
+	{
+		iprintlnbold_noloc "A bomb is still set!"
+		level.mef_announcedbomb = 1
+	}
+end local.winner
 
 
 new_bombmeter local.xpos local.ypos local.team local.bomb:
@@ -580,6 +763,10 @@ update_base_display:
 		{
 			local.str = "*" + self.bomb.desc + "*"
 			local.color = self.livecolor
+		} else if (self.bomb.hidden)
+		{
+			local.str = "[Hidden]"
+			local.color = ( 1.0 1.0 1.0 )
 		} else
 		{
 			local.str = "[" + self.bomb.desc + "]"

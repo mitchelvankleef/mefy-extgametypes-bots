@@ -1,0 +1,506 @@
+//ANZIO
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+// -------------------------------------------------------------------------------------
+main:
+// -------------------------------------------------------------------------------------
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Anzio"	
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_alliedtext4" ""
+	setcvar "g_obj_alliedtext5" ""
+	
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+	setcvar "g_obj_axistext4" ""
+	setcvar "g_obj_axistext5" ""
+
+	setcvar "g_scoreboardpic" "mp_anzio_lib"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "lib":
+			thread liberationthread
+			break
+	}
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+	
+	if (level.mef_gametype != "lib")
+	{
+		$alliesjail disablespawn
+		$axisjail disablespawn
+	}
+	
+	$world farplane 2200
+	$world farplane_color ".09 .10 .12"
+	$world farplane_bias 250
+	
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+	exec global/door_locked.scr
+	exec global/dm_ai.scr
+	level.music="MP_Anzio"
+	level.script = maps/lib/mp_anzio_lib.scr
+	exec global/ambient.scr mohdm1
+
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	$shutter1trigger thread TriggerShutter1
+	$shutter2trigger thread TriggerShutter2
+	$shutter3trigger thread TriggerShutter3
+	$shutter4trigger thread TriggerShutter4
+	$shutter5trigger thread TriggerShutter5
+	$shutter6trigger thread TriggerShutter6
+	$shutter7trigger thread TriggerShutter7
+	$shutter8trigger thread TriggerShutter8
+	$shutter9trigger thread TriggerShutter9	
+	$beam1 bind $beamcenter
+	$beam2 bind $beamcenter
+	$beamcenter rotatey 20
+	//$truck notsolid
+	//$truck nodamage
+	//$trapdoor thread trapdoor_init
+
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-2958.51 974.25 399.53 -90 SW Street" "818.81 -527.13 168.13 -90 NE Street"
+	waitthread global/libmef/bases.scr::addbasepair "-3504.87 -170.44 327.68 0 SE Street" "174.54 1456.87 328.13 -90 NW Street"
+end
+
+
+liberationthread:
+	// Can specify different scoreboard messages for round based
+	// games here.
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	huddraw_color 101 1 1 1
+	huddraw_color 102 1 1 1
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	// set the parameters for this round based match
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+	
+	/////////////////////////
+	waitthread global/libmef/util.scr::waittill_roundstart
+	/////////////////////////
+
+	// obj#, status, text, location
+	// status -- 1) don't draw, 2) in progress, 3) completed		
+	addobjective 1 1 "Free teammates from the jail" $alliesjailswitch.origin		
+	addobjective 2 1 "Free teammates from the jail" $axisjailswitch.origin
+
+	setcurrentobjective 1 allies
+	setcurrentobjective 2 axis
+
+	//Setup our jail break triggers
+	$axisjailtrigger thread AxisJailTrigger
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	thread global/lib_dm.scr::InitLiberationIcons
+
+	//disable invulnerable respawn. This could be used to keep jails open
+	setcvar "g_invulnoverride" "1"
+
+	wait 15
+
+	thread global/lib_dm.scr::playerwatch
+	
+	$alliesjail enablespawn
+	$axisjail enablespawn
+	$alliesnonjail disablespawn
+	$axisnonjail disablespawn
+end
+
+
+// -------------------------------------------------------------------------------------
+AxisJailTrigger:
+// -------------------------------------------------------------------------------------
+		
+	self waittill trigger	
+
+	//set the player using the jail switch trigger
+	local.player = parm.other
+
+	//flip the switch first
+	if( local.player.dmteam == axis )
+	{
+		waitthread DoAxisSwitch
+
+		thread global/lib_dm.scr::axisjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAxisSwitch
+	}
+
+	$axisjailtrigger thread AxisJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+AlliesJailTrigger:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	local.player = parm.other
+	
+	//flip the switch first
+	if( local.player.dmteam == allies )
+	{
+		waitthread DoAlliesSwitch
+
+		thread global/lib_dm.scr::alliesjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAlliesSwitch
+	}
+
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAxisSwitch:
+// -------------------------------------------------------------------------------------
+		
+	if( level.bAxisSwitchDown == 0 )
+	{			
+		$axisjailswitch anim turnoff
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 1
+	}
+	else
+	{			
+		
+		$axisjailswitch anim turnon
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 0
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAlliesSwitch:
+// -------------------------------------------------------------------------------------
+
+	if( level.bAlliesSwitchDown == 0 )
+	{			
+		$alliesjailswitch anim turnoff
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 1		
+	}
+	else
+	{			
+		$alliesjailswitch anim turnon
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 0		
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter1:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter1[1].isOpen != 1 )
+		{			
+			$shutter1 open $shutter1_origin
+		}
+		else
+		{			
+			$shutter1 close
+		}
+	}
+	
+	$shutter1trigger thread TriggerShutter1
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter2:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter2[1].isOpen != 1 )
+		{			
+			$shutter2 open $shutter2_origin
+		}
+		else
+		{			
+			$shutter2 close
+		}									   
+	}
+
+	$shutter2trigger thread TriggerShutter2
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter3:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter3[1].isOpen != 1 )
+		{			
+			$shutter3 open $shutter3_origin
+		}
+		else
+		{			
+			$shutter3 close
+		}
+	}
+
+	$shutter3trigger thread TriggerShutter3
+
+	end
+	
+// -------------------------------------------------------------------------------------
+TriggerShutter4:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter4[1].isOpen != 1 )
+		{			
+			$shutter4 open $shutter4_origin
+		}
+		else
+		{			
+			$shutter4 close
+		}
+	}
+
+	$shutter4trigger thread TriggerShutter4
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter5:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter5[1].isOpen != 1 )
+		{			
+			$shutter5 open $shutter5_origin
+		}
+		else
+		{			
+			$shutter5 close
+		}									   
+	}
+	
+	$shutter5trigger thread TriggerShutter5
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter6:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter6[1].isOpen != 1 )
+		{			
+			$shutter6 open $shutter6_origin
+		}
+		else
+		{			
+			$shutter6 close
+		}
+	}
+	
+	$shutter6trigger thread TriggerShutter6
+
+	end
+	
+// -------------------------------------------------------------------------------------
+TriggerShutter7:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter7[1].isOpen != 1 )
+		{			
+			$shutter7 open $shutter7_origin
+		}
+		else
+		{			
+			$shutter7 close
+		}
+	}
+
+	$shutter7trigger thread TriggerShutter7
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter8:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter8[1].isOpen != 1 )
+		{			
+			$shutter8 open $shutter8_origin
+		}
+		else
+		{			
+			$shutter8 close
+		}									   
+	}
+
+	$shutter8trigger thread TriggerShutter8
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter9:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (!parm.other.mef_spectator)
+	{
+		if( $shutter9[1].isOpen != 1 )
+		{			
+			$shutter9 open $shutter9_origin
+		}
+		else
+		{			
+			$shutter9 close
+		}
+	}
+
+	$shutter9trigger thread TriggerShutter9
+
+	end
+	
+// -------------------------------------------------------------------------------------
+Toilet:
+// -------------------------------------------------------------------------------------
+
+	$toilet playsound toilet_flush
+
+	end
+	
+// -------------------------------------------------------------------------------------
+//Trap Door
+// -------------------------------------------------------------------------------------
+
+trapdoor_init:
+	self solid
+	self damage 0
+	level.trapdoor_state = 0
+trapdoor_loop_start:
+	self waittill use
+	if (level.trapdoor_state  == 0)
+	{
+		self thread trapdoor_open
+	}
+	else if (level.trapdoor_state  == 1)
+	{
+		self thread trapdoor_close
+	}
+	goto trapdoor_loop_start
+end
+
+trapdoor_cycle local.duration:
+	wait local.duration
+	if (level.trapdoor_state == 1)
+	{
+		self thread trapdoor_close		
+	}
+end
+
+trapdoor_open:
+	level.trapdoor_state = 1
+	self openportal
+	self playsound gate_wood_open_move
+	self rotatezdownto 270
+	self time 1
+	self waitmove
+	self playsound gate_wood_open_stop
+	self thread trapdoor_cycle 15
+	
+end
+
+trapdoor_close:
+	self playsound gate_wood_close_move
+	level.trapdoor_state = 0
+	self rotatezupto 0
+	self time 1
+	self waitmove
+	self playsound gate_wood_close_stop
+	self closeportal
+
+end	

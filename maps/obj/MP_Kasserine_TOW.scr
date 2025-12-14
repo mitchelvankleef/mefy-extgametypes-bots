@@ -1,0 +1,864 @@
+// MP_Kasserine_TOW
+// Note: For objective function calls TakeOver and SetCurrent the
+// teams are as such:
+// 0 = Axis
+// 1 = Allies
+// 2 = Neutral
+// Map design by Yogi
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//----------------------------------------------------------
+// Main
+//----------------------------------------------------------
+main:
+	///////////////////////
+	//global initialization
+	///////////////////////
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Kasserine Pass" )
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_kasserine_tow" 
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "tow":
+		case "fttow":
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_Kasserine_TOW.scr"
+	level.music="MP_Kasserine"
+
+	//Exec our helper scripts
+	exec global/fogtrigger.scr // changed from 'waitexec' to 'exec'
+	exec global/exploder.scr
+	exec global/ambient.scr
+//	exec global/spotlight.scr // commented out - does not work in mp
+//	exec global/door_locked.scr::lock
+
+	//**************FOG**********************
+	level.sceneAxisWon_farDist  = 3000 
+	level.sceneAxisWon_fogBias  = 1000 
+	level.sceneAxisWon_fogColor = ( .35 .28 .20)
+
+	level.sceneAlliesWon_farDist  = 2500
+	level.sceneAlliesWon_fogBias  = 450
+	level.sceneAlliesWon_fogColor = ( .35 .28 .20)
+
+	level.sceneDefault_farDist  = 2500
+	level.sceneDefault_fogBias  = 450
+	level.sceneDefault_fogColor = ( .35 .28 .20)
+
+	///////////////////////
+	//set the default fog//
+	///////////////////////
+	level.farDist   = level.sceneDefault_farDist;
+	level.fogBias   = level.sceneDefault_fogBias;
+	level.fogColor  = level.sceneDefault_fogColor;
+
+	//***********
+	thread setFog
+	//***********
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//This will remove the bombs so that we can play in other modes...
+		$obj_axis_spawner_model remove
+		$obj_allies_spawner_model remove
+		$obj_blowbridge_model remove
+	}
+	
+	level waittill prespawn
+
+	// no network optimizations to reduce popping
+	setcvar	"g_netoptimize" "0"
+
+	level waittill spawn
+
+	for (local.i = 1; local.i < 1024; local.i++)
+	{
+		local.ent = getentbyentnum local.i
+		if (local.ent == NULL)
+			continue
+		if (local.ent.model != "models/statweapons/mg42_gun.tik")
+			continue
+		local.ent maxyawoffset 45
+	}
+
+	thread init_drillbit
+	thread init_fueldepot
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "3096.77 -818.37 864.35 -135 NW Ledge" "-4757.47 -4008.42 229.5 45 Minefield"
+	waitthread global/libmef/bases.scr::addbasepair "829.97 -4219.07 328.57 -90 NE Road" "-6410.49 -3598.24 616.13 -90 SE Sector"
+end
+
+
+towthread:
+	level.bRoundStarted = 0
+
+	exec global/tow_dm.scr
+//	exec global/dm_ai.scr	
+//	exec global/friendly.scr
+
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Protect the Convoy" )
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "Protect the bridge" )
+	setcvar "g_obj_alliedtext3" ( loc_convert_string "Shutdown the refinery" )
+	setcvar "g_obj_alliedtext4" ( loc_convert_string "Shutdown the fuel depot" )
+	setcvar "g_obj_alliedtext5" ( loc_convert_string "Detonate German Entrance" )
+
+	setcvar "g_obj_axistext1" ( loc_convert_string "Protect Entrance" )
+	setcvar "g_obj_axistext2" ( loc_convert_string "Keep the fuel flowing" )
+	setcvar "g_obj_axistext3" ( loc_convert_string "Keep the refinery running" )
+	setcvar "g_obj_axistext4" ( loc_convert_string "Destroy the bridge" )
+	setcvar "g_obj_axistext5" ( loc_convert_string "Destroy the allied Convoy" )
+
+	level waittill prespawn
+
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_allies_spawner 1 5 5
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_axis_spawner 5 1 1
+
+	level waittill spawn
+
+	level.dmroundlimit	= 5			// round time limit in minutes
+	level.clockside		= allies	// set to axis, allies, kills, or draw
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	level.bRoundStarted = 1
+
+	thread init_objectives
+	thread init_spawner_bombs
+end
+
+
+//----------------------------------------------------------
+//Initialize the objective entities
+//----------------------------------------------------------
+init_objectives:
+
+	$obj_axis_spawner ControlledBy 0
+	$obj_blowbridge ControlledBy 1
+	$obj_fueldepot ControlledBy 1
+	$obj_refinery ControlledBy 0
+	$obj_allies_spawner ControlledBy 1
+
+	$obj_axis_spawner initialize
+	$obj_blowbridge initialize
+	$obj_fueldepot initialize
+	$obj_refinery initialize
+	$obj_allies_spawner initialize
+
+	$obj_refinery SetCurrent 1
+	$obj_fueldepot SetCurrent 0
+end
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:
+	
+	//First lets do the allies
+	if( $obj_refinery.ControlledBy != 1 )
+	{	
+		iprintln ( loc_convert_string "Allies -- Shut down the refinery!" )
+		$obj_refinery SetCurrent 1
+	}	
+	else if( $obj_fueldepot.ControlledBy != 1 )
+	{	
+		iprintln ( loc_convert_string "Allies -- Turn off the fuel depot!" )
+		$obj_fueldepot SetCurrent 1
+	}
+	else if( $obj_axis_spawner.ControlledBy != 1 )
+	{
+		iprintln ( loc_convert_string "Allies -- Blow up the axis spawn!" )
+		$obj_axis_spawner SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $obj_fueldepot.ControlledBy != 0 )
+	{
+		iprintln ( loc_convert_string "Axis -- Control the fuel depot!" )
+		$obj_fueldepot SetCurrent 0
+	}
+	else if( $obj_refinery.ControlledBy != 0 )
+	{	
+		iprintln ( loc_convert_string "Axis -- Start up the refinery!" )
+		$obj_refinery SetCurrent 0
+	}	
+	else if( $obj_blowbridge.ControlledBy != 0 )
+	{
+		iprintln ( loc_convert_string "Axis -- Blow up the bridge!" )
+		$obj_blowbridge SetCurrent 0
+	}
+
+end
+
+//-----------------------------------------------
+// See if someone won
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAllies = 0
+
+	if ($obj_refinery.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if ($obj_fueldepot.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if ($obj_axis_spawner.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if( local.nAllies == 3 )
+	{
+		//If the clock expires during the movie ignore it
+		level ignoreclock 1
+		level.mef_gameover = 1
+
+		//if there is a bomb ticking stop it.
+		waitthread global/libmef/bomb.scr::StopBomb
+
+		//Play the cinematic
+		thread AlliesWon
+	}
+
+	if( $obj_blowbridge.ControlledBy == 0 )
+	{
+		//If the clock expires during the movie ignore it
+		level ignoreclock 1
+		level.mef_gameover = 1
+
+		//if there is a bomb ticking stop it.
+		waitthread global/libmef/bomb.scr::StopBomb
+
+		//Play the cinematic
+		thread AxisWon
+	}
+
+end
+
+//-----------------------------------------------
+// Init the spawner bombs
+//-----------------------------------------------
+init_spawner_bombs:
+	
+	//Allied spawner bomb
+	$obj_allies_spawner_model thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_Kasserine_TOW.scr::destroy_allies_spawner
+
+	//Axis spawner bomb
+	$obj_axis_spawner_model thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_Kasserine_TOW.scr::destroy_axis_spawner
+
+end
+
+//----------------------------------------------------------
+// Turn the drillbit
+//----------------------------------------------------------
+
+playPipeSound:
+	self.playsound = 1
+	self.soundmaker = spawn "animate/military_radio.tik" "origin" self.origin "scale" "0.01"
+//	self.soundmaker hide
+	self.soundmaker rendereffects "+dontdraw"
+	while (1) 
+	{
+//		self playsound Oil_Pipeline_On
+		self.soundmaker loopsound Oil_Pipeline_Flow
+		while (self.playsound == 1) {
+			wait 0.3
+		}
+		self.soundmaker stoploopsound 
+		self playsound Oil_Pipeline_Off
+		while (self.playsound != 1) {
+			wait 0.3
+		}
+	}
+	self.soundmaker remove
+end
+
+init_drillbit:
+
+	$pipesound thread playPipeSound
+
+	$refinerylever.on_origin = $refinerylever.origin
+	$refinerylever.off_origin = $refinerylever.origin + ( 0 15 0 )
+	$refinerylever.onState = 1
+
+	// Maybe some sound too?
+
+	if( $obj_refinery.ControlledBy == 0 )
+	{
+		$drillbit rotateY 3.5
+		$refinerylights show
+		$drillbit loopsound Drill_run
+		$pipesound thread turnOn
+	}
+	else
+	{
+		$refinerylights hide
+		$pipesound thread turnOff
+		thread turnOffRefineryLever
+	}
+end
+
+turnOffRefineryLever:
+	$refinerylever.onState = 2
+	
+	$refinerylever notsolid
+	$refinerylever speed 10
+	$refinerylever moveto $refinerylever.off_origin
+	$refinerylever waitmove
+	$refinerylever playsound switchbox
+	$refinerylever solid
+
+	$refinerylever.onState = 0
+end
+
+turnOnRefineryLever:
+	$refinerylever.onState = 2
+
+	$refinerylever notsolid
+	$refinerylever speed 10
+	$refinerylever moveto $refinerylever.on_origin
+	$refinerylever waitmove
+	$refinerylever playsound switchbox
+	$refinerylever solid
+
+	$refinerylever.onState = 1
+end
+
+//----------------------------------------------------------
+// Throw the refinery switch
+//----------------------------------------------------------
+
+obj_refinery_thread local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (!level.bRoundStarted) 
+	{
+		end
+	}
+
+	if( $refinerylever.onState == 2 )
+		end
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		if( $obj_refinery.ControlledBy != 0 )
+		{
+			thread turnOnRefineryLever
+
+			$obj_refinery TakeOver 0
+			waitthread global/libmef/tow.scr::objective_captured axis
+			iprintln ( loc_convert_string "The Axis have taken the refinery!" )
+
+			$refinerylights show
+			$drillbit rotateY -3.5
+			$drillbit playsound Drill_On
+
+			$pipesound thread turnOn
+
+			//Update team current objectives
+			thread set_objectives
+			waitthread Check_End_Match
+			$drillbit loopsound Drill_run
+		}
+	}
+	else if( local.switcher.dmteam == "allies" )
+	{
+		if( $obj_refinery.ControlledBy != 1 )
+		{		
+			thread turnOffRefineryLever
+
+			//Take the objective
+			$obj_refinery TakeOver 1
+			waitthread global/libmef/tow.scr::objective_captured allies
+			iprintln ( loc_convert_string "The Allies have shut down the refinery!" )
+
+			$refinerylights hide
+			$drillbit rotateY 0.0
+			$drillbit stoploopsound
+			$pipesound thread turnOff
+			$drillbit playsound Drill_Off
+
+			//Update team current objectives
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+end
+
+
+//----------------------------------------------------------
+// Turn the drillbit
+//----------------------------------------------------------
+
+playDepotLightSound:
+	self.playsound = 1
+	self.soundmaker = spawn "animate/military_radio.tik" "origin" self.origin "scale" "0.01"
+	self.soundmaker rendereffects "+dontdraw"
+	while (1) 
+	{
+		self.soundmaker loopsound Lights_Hum
+		while (self.playsound == 1) {
+			wait 0.3
+		}
+		self.soundmaker stoploopsound 
+		while (self.playsound != 1) {
+			wait 0.3
+		}
+	}
+	self.soundmaker remove
+end
+
+turnOn:
+	self.playsound = 1
+end
+
+turnOff:
+	self.playsound = 0
+end
+
+playDepotMachineSound:
+	self.playsound = 1
+	while (1) {
+		while (self.playsound == 1) {
+			self playsound Rolling_Gate_move
+			wait 2.0
+		}
+		while (self.playsound != 1) {
+			wait 0.5
+		}
+	}
+end
+
+init_fueldepot:
+
+	$depotlight thread playDepotLightSound
+	$depotsound thread playDepotLightSound
+
+	$depotlever.off_origin = $depotlever.origin
+	$depotlever.on_origin = $depotlever.origin + ( 0 20 20 )
+	$depotlever.onState = 0
+
+	if( $obj_fueldepot.ControlledBy == 0 )
+	{
+		$depotlight thread turnOn
+		$depotsound thread turnOn
+		$depottowerlight show
+		thread turnOnDepotLever
+	}
+	else
+	{
+		$depotlight thread turnOff
+		$depotsound thread turnOff
+		$depottowerlight hide
+	}
+end
+
+turnOffDepotLever:
+	$depotlever.onState = 2
+	
+	$depotlever notsolid
+	$depotlever speed 10
+	$depotlever moveto $depotlever.off_origin
+	$depotlever waitmove
+	$depotlever playsound switchbox
+	$depotlever solid
+
+	$depotlever.onState = 0
+end
+
+turnOnDepotLever:
+	$depotlever.onState = 2
+
+	$depotlever notsolid
+	$depotlever speed 10
+	$depotlever moveto $depotlever.on_origin
+	//$depotlever time 1.0
+	//$depotlever rotatezdown 30
+	$depotlever waitmove
+	$depotlever playsound switchbox
+	$depotlever solid
+
+	$depotlever.onState = 1
+end
+
+//----------------------------------------------------------
+// Throw the fueldepot switch
+//----------------------------------------------------------
+
+obj_fueldepot_thread local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (!level.bRoundStarted) 
+	{
+		end
+	}
+
+	if( $depotlever.onState == 2 )
+		end
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		if( $obj_fueldepot.ControlledBy != 0 )
+		{
+			thread turnOnDepotLever
+
+			$obj_fueldepot TakeOver 0
+			waitthread global/libmef/tow.scr::objective_captured axis
+			iprintln ( loc_convert_string "The Axis have taken the fuel depot!" )
+
+			$depotlight thread turnOn
+			$depotsound thread turnOn
+			$depottowerlight show
+
+			//Update team current objectives
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+	else if( local.switcher.dmteam == "allies" )
+	{
+		if( $obj_fueldepot.ControlledBy != 1 )
+		{
+			thread turnOffDepotLever
+
+			//Take the objective
+			$obj_fueldepot TakeOver 1
+			waitthread global/libmef/tow.scr::objective_captured allies
+			iprintln ( loc_convert_string "The Allies have shut down the fuel depot!" )
+
+			$depotlight thread turnOff
+			$depotsound thread turnOff
+			$depottowerlight hide
+
+			//Update team current objectives
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+end
+
+//----------------------------------------------------------
+// Throw the blowbridge switch
+//----------------------------------------------------------
+
+obj_blowbridge_thread local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (!level.bRoundStarted)
+	{
+		end
+	}
+
+	if ( local.switcher.dmteam == "allies" ) {
+		local.switcher iprint ( loc_convert_string "What are you thinking? The Axis are trying to blow the bridge!" )
+		end
+	}
+
+	if ( $obj_fueldepot.ControlledBy != 0 ) {
+		local.switcher iprint ( loc_convert_string "Bridge can't be blown until fuel depot is held!" )
+		end
+	}
+
+	if ( $obj_refinery.ControlledBy != 0 ) {
+		local.switcher iprint ( loc_convert_string "Bridge can't be blown until refinery is held!" )
+		end
+	}
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		$obj_blowbridge TakeOver 0
+		iprintln ( loc_convert_string "The Axis have blown up the bridge!" )
+
+		thread set_objectives
+		waitthread Check_End_Match
+	}
+end
+
+//----------------------------------------------------------
+//Destroy the allied spawner here
+//----------------------------------------------------------
+destroy_allies_spawner:
+
+	//Make sure we are the allies	
+	iprintln ( loc_convert_string "The Allied Convoy has been destroyed!" )
+
+	//Take over the objective
+	$obj_allies_spawner TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+	
+	iprintln ( loc_convert_string "The Allied Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Destroy the axis spawner here
+//----------------------------------------------------------
+destroy_axis_spawner:
+
+	iprintln ( loc_convert_string "The Axis Entrance has been destroyed!" )
+
+	$obj_axis_spawner TakeOver 1	
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	iprintln ( loc_convert_string "The Axis Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+find_camerapoint:
+
+	local.cameraloc = ( -1305 -4450 935 )
+	local.roadloc = ( -1305 -4450 135 )
+
+	local.tmpangle = self.angles
+	local.tmpangle[0] = 10.0 - randomfloat(60.0)
+	local.tmpangle[1] = randomfloat(360.0)
+	local.tmpangle[2] = 0.0
+	local.tmpvector = angles_toforward local.tmpangle
+	local.tmpend = local.cameraloc + ( 2400 * local.tmpvector )
+
+	local.end = trace local.cameraloc local.tmpend
+
+	local.dist = vector_length ( local.tmpend - local.cameraloc )
+	local.normal = vector_normalize ( local.tmpend - local.cameraloc )
+	local.tmpdist = ( ( 50.0 + randomint ( 50 ) ) / 100.0 ) * local.dist
+
+	self.end = ( local.normal * local.tmpdist ) + local.cameraloc
+
+	self.finished = sighttrace self.end local.cameraloc
+	if (self.finished == 0)
+		end
+
+	self.finished = sighttrace local.cameraloc self.end
+	if (self.finished == 0)
+		end
+
+	self.finished = sighttrace self.end local.roadloc
+	if (self.finished == 0)
+		end
+
+	self.finished = sighttrace local.roadloc self.end
+end
+
+do_axis_camera:
+
+	local.lookat = spawn script_model
+	local.lookat.origin = ( -1305 -4450 850 )
+
+	local.lookat.finished = 0
+
+	while (local.lookat.finished == 0) {
+		local.lookat waitthread find_camerapoint
+	}
+
+	local.camera = spawn func_camera spawnflags 24
+	local.camera fov 80 2
+	local.camera speed 0.5
+	local.camera movetopos local.lookat.end
+
+	local.camera lookat local.lookat
+
+	cuecamera local.camera
+end
+
+allied_convoy:
+	
+	local.tank1 = spawn vehicles/sherman_base.tik
+	local.tank1.origin = $objtruckstart.origin
+	local.tank1.angles = ( 0 180 0 )
+	local.tank1 drive $objtruckstart 30 90 256 256
+
+	local.lookat = spawn script_object
+	local.lookat.origin = ( -915 -4510 165 )
+
+	local.camera = spawn func_camera spawnflags 24
+	local.camera fov 80 2
+	local.camera speed 0.5
+	local.camera movetopos ( -1295 -3425 1585 )
+	local.camera lookat local.lookat
+	cuecamera local.camera
+
+	wait 3.0
+
+	local.tank2 = spawn vehicles/sherman_base.tik
+	local.tank2.origin = $objtruckstart.origin
+	local.tank2.angles = ( 0 180 0 )
+	local.tank2 drive $objtruckstart 30 90 256 256
+
+	wait 3.0
+	
+	local.tank3 = spawn vehicles/sherman_base.tik
+	local.tank3 = spawn vehicles/sherman_base.tik
+	local.tank3.origin = $objtruckstart.origin
+	local.tank3.angles = ( 0 180 0 )
+	local.tank3 drive $objtruckstart 30 90 256 256
+
+end
+
+
+//----------------------------------------------------------
+//Allies Won do their cinematic
+//----------------------------------------------------------
+AlliesWon:
+	
+	level.farDist   = level.sceneAlliesWon_farDist;
+	level.fogBias   = level.sceneAlliesWon_fogBias;
+	level.fogColor  = level.sceneAlliesWon_fogColor;
+	
+	//***********
+	thread setFog
+	//***********
+
+	$player nodamage
+	$player hide
+	freezeplayer
+
+	forcemusic aux2 aux2
+
+	//ignore the clock for the movies
+	level ignoreclock 1
+	level.mef_gameover = 1
+
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+
+	thread allied_convoy
+	wait 8.0
+
+	forcemusic aux3 aux3
+
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	wait 5
+
+end
+
+
+//-----------------------------------------------
+//Axis have won do their cinematic
+//-----------------------------------------------
+AxisWon:
+
+	level.farDist   = level.sceneAxisWon_farDist;
+	level.fogBias   = level.sceneAxisWon_fogBias;
+	level.fogColor  = level.sceneAxisWon_fogColor;
+
+	//***********
+	thread setFog
+	//***********
+
+	//Standard hide player stuff
+	$player nodamage
+	$player hide
+	freezeplayer
+	level ignoreclock 1
+	level.mef_gameover = 1
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+
+	forcemusic aux4 aux4
+
+	waitthread do_axis_camera
+
+	wait 4.0
+	//$player playsound Kasserine_Bridge
+	thread global/exploder.scr::explode 001	
+	$player playsound Kasserine_Bridge
+
+	wait 6.0
+
+	forcemusic aux5 aux5
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+	wait 5
+end
+//___________________________________________________________________________________________________________
+//                   MISC FUNCTIONS
+//___________________________________________________________________________________________________________
+
+//------------------------------------------------
+setFog:
+//------------------------------------------------
+	if (level.nofog)
+	{
+		level.farDist = 40000
+	}
+	$world farclipoverride level.farDist
+	$world farplane level.farDist
+	$world farplane_bias level.fogBias
+	if (level.fogColor != NIL) 
+	{
+		$world farplane_color level.fogColor
+	}
+end

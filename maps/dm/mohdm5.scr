@@ -3,7 +3,7 @@
 // SCRIPTING: NED
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,31 +23,13 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm5"
 
-	level.mef_mapname = "mohdm5"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 	}
 
@@ -60,7 +42,10 @@ setcvar "g_scoreboardpic" "mohdm5"
 	exec global/ambient.scr mohdm5
 
 	level waittill spawn
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 
 
 snow:
@@ -75,36 +60,24 @@ snow:
 	level.rain_min_dist = "1800"
 	//level.rain_min_dist = "512"
 	level.rain_numshaders = 12
-	level.rain_shader = "textures/snow"
-
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		level.rain_shader = "textures/snow"
+	} else
+	{
+		level.rain_shader = "textures/snow0"
+	}
 
 end
 
 //-----------------------------------------------------------------------------
 
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
-
 
 setup_bases:
 	// common bases for dem and ctf
-	waitthread global/libmef/bases.scr::addbasepair "3055 -2771 157.63 -150 Allied Campfire" "-21.98 -6174.91 112.13 -68 Mobile Nebelwerfer" fire sdkfznebel
-	waitthread global/libmef/bases.scr::addbasepair "3709 -4743 112.13 180 Allied Tent" "176 -4876 112.13 4 V2 Rocket" tent v2rocket
-	waitthread global/libmef/bases.scr::addbasepair "4289 -5910 156.04 0 Jeep" "-284.23 -3464.04 155.38 -15 BMW Motorcycle" jeep bmwbike NIL ( 5 345 359 )
+	waitthread global/libmef/bases.scr::addbasepair "3055 -2771 157.63 -150 NW: Campfire" "-21.98 -6174.91 112.13 -68 SE: Mobile Nebelwerfer" fire sdkfznebel
+	waitthread global/libmef/bases.scr::addbasepair "3709 -4743 112.13 180 N: Allied Tent" "176 -4876 112.13 4 S: V2 Rocket" tent v2rocket
+	waitthread global/libmef/bases.scr::addbasepair "4289 -5910 156.04 0 NE: Jeep" "-284.23 -3464.04 155.38 -15 SW: Motorcycle" jeep bmwbike NIL ( 5 345 359 )
 	waitthread global/libmef/bases.scr::addbasepair "2232 -6528 112.13 180 East Bridge" "887 -2778 112.13 0 West Bridge" indycrate indycrate
 
 	// additional bases for ctf only

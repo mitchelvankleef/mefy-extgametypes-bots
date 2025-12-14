@@ -2,9 +2,9 @@
 ================================================================================
 Utility Library
 for Medal Of Honor
-Version 1.3.3 (11/15/04)
+Version 1.4.2 (05/14/05)
 
-Copyright (c) 2003-2004 Mark Follett
+Copyright (c) 2003-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -31,20 +31,41 @@ SOFTWARE.
 init_util_lib:
 	level.mef_devmode = bool (getcvar "g_mef_devmode")
 	waitthread get_version_info
-	waitthread check_new_map
-	thread global/libmef/hud.scr::hud_thread
+	waitthread clear_playernames
+
+	level.mef_version = "1.2.2"
+	setcvar "g_mef_version" level.mef_version
 	
 	level.mef_settings[0] = NIL
 	level.ctf_settings = level.mef_settings
 	level.ft_settings = level.mef_settings
 	level.dem_settings = level.mef_settings
-	
+
+	waitthread init_teams
+
+	level.mef_stringconv["tolower"]          = waitthread string_makeconv "ABCDEFGHIJKLMNOPQRSTUVWXYZ"   "abcdefghijklmnopqrstuvwxyz"
+	level.mef_stringconv["normalizemapname"] = waitthread string_makeconv "\\ABCDEFGHIJKLMNOPQRSTUVWXYZ" "/abcdefghijklmnopqrstuvwxyz"
+
+	waitthread get_mapname
+	thread global/libmef/hud.scr::hud_thread
+	thread round_timer
+end
+
+
+init_teams:
+	if (level.mef_allies != NIL)
+	{
+		end
+	}
+
 	level.mef_allies = waitthread init_teamdata "allies"
 	level.mef_axis = waitthread init_teamdata "axis"
+	level.mef_ffa = waitthread init_teamdata "ffa"
 	level.mef_allies.otherteam = level.mef_axis
 	level.mef_axis.otherteam = level.mef_allies
 	level.mef_team["allies"] = level.mef_allies
 	level.mef_team["axis"] = level.mef_axis
+	level.mef_team["ffa"] = level.mef_ffa
 end
 
 
@@ -61,6 +82,9 @@ init_teamdata local.team:
 	{
 		local.ent.desc = "Axis"
 	}
+	
+	local.ent.spawns[0] = NIL
+	local.ent.spawnregions["all"][0] = NIL
 end local.ent
 
 
@@ -79,143 +103,124 @@ get_version_info:
 end
 
 
-check_new_map:
-	local.mapname = getcvar "mapname"
-	local.lastmap = getcvar "g_mef_lastmap"
-	
-	if (local.mapname != local.lastmap)
-	{
-		setcvar "g_mef_lastmap" local.mapname
-		level.mef_newmap = 1
-	}
-end
-
-
 get_gametype:
 	waitthread init_util_lib
-
-	local.basegtypes[1] = "ffa"::"Free-For-All"
-	local.basegtypes[2] = "tdm"::"Team-Match"
-	local.basegtypes[3] = "rbm"::"Round-Based-Match"
-	local.basegtypes[4] = "obj"::"Objective-Match"
-
-	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
-	{
-		local.basegtypes[5] = "tow"::"Tug-of-War"
-	}
-	
-	if (level.mef_baseversion == "bt")
-	{
-		local.basegtypes[6] = "lib"::"Liberation"
-	}
-	
-	for (local.i = 1; local.i < (local.basegtypes.size + 1); local.i++)
-	{
-		local.gametypes[local.basegtypes[local.i][1]] = (local.basegtypes[local.i][2])::0::(local.i)
-	}
-
-	local.gametypes["ctf"] = "Capture-The-Flag"::1
-	local.gametypes["ft"] = "Freeze-Tag"::1
-	local.gametypes["dem"] = "Demolition"::1
-	local.gametypes["ftobj"] = "Freeze-Tag-Objective"::1
-	local.gametypes["ftctf"] = "Freeze-Tag-CTF"::1
-	local.gametypes["ftdem"] = "Freeze-Tag-Demolition"::1
-	local.gametypes["fttow"] = "Freeze-Tag-TOW"::1
-
-	if (bool (getcvar "g_mef_disable"))
-	{
-		local.gtype = "none"
-	} else
-	{
-		local.gtype = getcvar "g_extgametype"
-		if (!(waitthread is_valid_gametype local.gtype))
-		{
-			local.gtype = getcvar ("g_extgametype_" + level.mef_mapname)
-		}
-
-		if (!(waitthread is_valid_gametype local.gtype))
-		{
-			local.gtypenum = int(getcvar "g_gametype")
-
-			if (local.gtypenum == 3 || local.gtypenum == 4 || local.gtypenum == 5)
-			{
-				local.gtype = level.mef_defaultgametype
-			}
-		}
-		
-		if (!(waitthread is_valid_gametype local.gtype))
-		{
-			local.gtype = "none"
-		}
-
-		// if this is a built-in gametype, then set g_gametype to the appropriate value
-		local.gametype = local.gametypes[local.gtype]
-		if (local.gametype != NIL && !local.gametype[2])
-		{
-			setcvar "g_gametype" local.gametype[3]
-		}
-	}
-
-	// if no gametype was selected, determine which one it is from the g_gametype cvar
-	if (local.gtype == "none")
-	{
-		local.gtypenum = int(getcvar "g_gametype")
-		if (local.basegtypes[local.gtypenum] != NIL)
-		{
-			local.gtype = local.basegtypes[local.gtypenum][1]
-		}
-	}
-
-	// set the gametype string for the selected gametype
-	if (local.gametypes[local.gtype] != NIL)
-	{
-		setcvar "g_gametypestring" local.gametypes[local.gtype][1]
-	}
-
-	level.mef_gametype = local.gtype
-	
-	thread global/libmef/respawn.scr::respawncontrol_thread
-end local.gtype
-
-
-is_valid_gametype local.gtype:
-end (waitthread is_in_array level.mef_supportedgametypes local.gtype 1)
+end (waitthread global/libmef/gametypes.scr::get_gametype)
 
 
 read_gametype_settings:
-	if (level.mef_readgamesettings)
-	{
-		end
-	}
-	
-	level.mef_readgamesettings = 1
+end (waitthread global/libmef/gametypes.scr::read_gametype_settings)
 
-	switch (level.mef_gametype)
-	{
-		case "ft":
-		case "ftobj":
-		case "fttow":
-			waitthread global/libmef/ft.scr::read_game_settings
-			break
-			
-		case "ctf":
-		case "ftctf":
-			waitthread global/libmef/ctf.scr::read_game_settings
-			break
-			
-		case "dem":
-		case "ftdem":
-			waitthread global/libmef/dem.scr::read_game_settings
-			break
-	}
 
-	if (!((level.mef_gametype == "dem" && level.mef_settings["respawn"]) ||
-	    (level.mef_gametype == "ctf" && level.mef_settings["respawn"])))
+waittill_roundstart:
+	if (level.roundbased && !level.mef_devmode)
 	{
-		level.mef_deepbases = 1
+		if (level.mef_roundstarted == NIL)
+		{
+			level.mef_roundstarted = 0
+			thread roundstart_thread
+		}
+		
+		while (!level.mef_roundstarted)
+		{
+			waitframe
+		}
 	}
 end
 
+
+roundstart_thread:
+	while (1)
+	{
+		local.allies = 0
+		local.axis = 0
+		
+		for (local.i = 1; local.i < ($player.size + 1); local.i++)
+		{
+			local.player = $player[local.i]
+			
+			if (local.player != NIL && local.player != NULL)
+			{
+				if (local.player.dmteam == "allies")
+				{
+					local.allies = 1
+				} else if (local.player.dmteam == "axis")
+				{
+					local.axis = 1
+				}
+			}
+		}
+		
+		if (local.allies && local.axis)
+		{
+			level.mef_roundstarted = 1
+			end
+		}
+		
+		waitframe
+	}
+end
+
+
+round_timer:
+	level.mef_elapsedtime = 0.0
+	
+	level waittill prespawn
+
+	level waittill spawn
+	
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	local.starttime = level.time
+	while (1)
+	{
+		level.mef_elapsedtime = level.time - local.starttime
+		wait 0.1
+	}
+end
+
+
+get_mapname:
+	level.mef_fullmapname = waitthread string_convert (getcvar "mapname") level.mef_stringconv["normalizemapname"]
+	local.items = waitthread split_string level.mef_fullmapname "/"
+	if (local.items.size > 0)
+	{
+		level.mef_mapname = local.items[(local.items.size - 1)]
+		local.items[(local.items.size - 1)] = NIL
+		level.mef_mapprefix = waitthread join_string local.items "/"
+	} else
+	{
+		level.mef_mapname = ""
+		level.mef_mapprefix = ""
+	}
+	
+	if (level.mef_mapprefix == "obj" && level.mef_baseversion == "aa")
+	{
+		level.mef_maptype = "obj"
+	} else
+	{
+		level.mef_maptype = "dm"
+	}
+	
+	if (level.mef_defaultgametype == NIL)
+	{
+		if (level.mef_mapprefix == "obj")
+		{
+			local.towtest = waitthread split_string level.mef_mapname "_"
+			if (local.towtest.size > 1 && local.towtest[(local.towtest.size - 1)] == "tow")
+			{
+				level.mef_defaultgametype = "fttow"
+			} else
+			{
+				level.mef_defaultgametype = "ftobj"
+			}
+		} else
+		{
+			level.mef_defaultgametype = "ft"
+		}
+	}
+end
+	
 
 parse_game_version local.gameversions local.verstring:
 	for (local.i = 0; local.i < local.gameversions.size; local.i++)
@@ -256,30 +261,213 @@ parse_game_version local.gameversions local.verstring:
 end
 
 
-split_string local.str local.sep:
-	local.result[0] = NIL
-	local.nextitem = ""
-
-	for (local.i = 0; local.i < local.str.size; local.i++)
+string_makeconv local.fromchars local.tochars:
+	for (local.i = 0; local.i < local.fromchars.size; local.i++)
 	{
-		local.char = local.str[local.i]
+		local.map[(string local.fromchars[local.i])] = local.tochars[local.i]
+	}
+end local.map
 
-		if (local.char == local.sep)
-		{
-			if (local.nextitem != "")
-			{
-				local.result[local.result.size] = local.nextitem
-				local.nextitem = ""
-			}
-		} else
-		{
-			local.nextitem += local.char
-		}
+
+string_equal local.stra local.strb local.map:
+	if (local.stra.size != local.strb.size)
+	{
+		end 0
 	}
 
-	if (local.nextitem != "")
+	for (local.i = 0; local.i < local.stra.size; local.i++)
 	{
-		local.result[local.result.size] = local.nextitem
+		local.chara = local.stra[local.i]
+		local.charb = local.strb[local.i]
+
+		if (local.chara != local.charb && local.map[(string local.chara)] != local.charb && local.map[(string local.charb)] != local.chara)
+		{
+			end 0
+		}
+	}
+end 1
+
+
+string_tolower local.str:
+end (waitthread string_convert local.str level.mef_stringconv["tolower"])
+
+
+string_convert local.str local.map:
+	local.result = ""
+	for (local.i = 0; local.i < local.str.size; local.i++)
+	{
+		local.char = (string local.str[local.i])
+		
+		if (local.map[local.char] != NIL)
+		{
+			local.result += local.map[local.char]
+		} else
+		{
+			local.result += local.str[local.i]
+		}
+	}
+end local.result
+
+
+make_sep_array local.seps:
+	for (local.i = 0; local.i < local.seps.size; local.i++)
+	{
+		local.result[(string local.seps[local.i])] = 1
+	}
+end local.result
+
+
+escape_string local.str local.schars local.escchar:
+	local.result = ""
+
+	local.carray = waitthread make_sep_array local.schars
+	
+	for (local.i = 0; local.i < local.str.size; local.i++)
+	{
+		local.char = string local.str[local.i]
+		if (local.carray[local.char] || (local.char == local.escchar))
+		{
+			local.result += local.escchar
+		}
+		
+		local.result += local.char
+	}
+end local.result
+
+
+split_string local.str local.seps local.keepseps local.singlesep local.escchar:
+	local.result[0] = NIL
+	
+	local.separray = waitthread make_sep_array local.seps
+
+	local.i = 0
+	local.escape = 0
+
+	while (1)
+	{
+		local.item = ""
+		while (local.i < local.str.size && (local.escape || !local.separray[(string local.str[local.i])]))
+		{
+			local.char = local.str[local.i]
+			if (!local.escape && (local.char == local.escchar))
+			{
+				local.escape = 1
+			} else
+			{
+				local.item += local.char
+				local.escape = 0
+			}
+			local.i++
+		}
+
+		if (local.item != "" || local.keepseps)
+		{
+			local.result[local.result.size] = local.item
+		}
+	
+		if (local.i == local.str.size)
+		{
+			end local.result
+		}
+
+		local.item = ""
+		while (local.i < local.str.size && local.separray[(string local.str[local.i])])
+		{
+			local.item += local.str[local.i]
+			local.i++
+			
+			if (local.singlesep)
+			{
+				break
+			}
+		}
+		
+		if (local.keepseps)
+		{
+			local.result[local.result.size] = local.item
+		}
+	}
+end
+
+
+string_popitem local.str local.seps:
+	local.separray = waitthread make_sep_array local.seps
+
+	local.result[0] = NIL
+	local.i = 0
+	
+	while (local.i < local.str.size && local.separray[(string local.str[local.i])])
+	{
+		local.i++
+	}
+	
+	local.result[0] = ""
+	while (local.i < local.str.size && !local.separray[(string local.str[local.i])])
+	{
+		local.result[0] += local.str[local.i]
+		local.i++
+	}
+
+	while (local.i < local.str.size && local.separray[(string local.str[local.i])])
+	{
+		local.i++
+	}
+	
+	local.result[1] = ""
+	while (local.i < local.str.size)
+	{
+		local.result[1] += local.str[local.i]
+		local.i++
+	}
+end local.result
+
+
+string_popkey local.str local.seps:
+	local.separray = waitthread make_sep_array local.seps
+
+	local.result[0] = NIL
+	local.i = 0
+	
+	local.result[0] = ""
+	while (local.i < local.str.size && !local.separray[(string local.str[local.i])])
+	{
+		local.result[0] += local.str[local.i]
+		local.i++
+	}
+	
+	if (local.i == local.str.size || local.result[0] == "")
+	{
+		end
+	}
+
+	while (local.i < local.str.size && local.separray[(string local.str[local.i])])
+	{
+		local.i++
+	}
+	
+	local.result[1] = ""
+	while (local.i < local.str.size)
+	{
+		local.result[1] += local.str[local.i]
+		local.i++
+	}
+end local.result
+
+
+read_chained_cvar local.name local.escapechar local.replace:
+	local.maxcvars = 999
+	local.i = 0
+	local.result = getcvar local.name
+	if (local.result == "")
+	{
+		end local.result
+	}
+	
+	while (local.result[(local.result.size - 1)] == local.escapechar && local.i < local.maxcvars)
+	{
+		local.result[(local.result.size - 1)] = local.replace
+		local.i++
+		local.result += (getcvar (local.name + local.i))
 	}
 end local.result
 
@@ -297,145 +485,7 @@ join_string local.strlist local.sep:
 end local.result
 
 
-parse_options local.str:
-	local.keys[0] = NIL
-	local.keyname = ""
-	local.keylist[0] = NIL
-	local.strlist = waitthread split_string local.str " "
-	for (local.i = 0; local.i < local.strlist.size; local.i++)
-	{
-		local.item = local.strlist[local.i]
-		if ((local.item.size > 1) && (local.item[(local.item.size - 1)] == ":"))
-		{
-			local.keyname = ""
-			for (local.j = 0; local.j < (local.item.size - 1); local.j++)
-			{
-				local.keyname += local.item[local.j]
-			}
-			
-			if (local.keys[local.keyname] == NIL)
-			{
-				local.keylist[local.keylist.size] = local.keyname
-			}
-			
-			local.keys[local.keyname] = NIL
-		} else
-		{
-			if (local.keyname != "")
-			{
-				if (local.keys[local.keyname] != NIL)
-				{
-					local.keys[local.keyname] += " "
-				} else
-				{
-					local.keys[local.keyname] = ""
-				}
-				local.keys[local.keyname] += (" " + local.item)
-			}
-		}
-	}
-end (local.keys::local.keylist)
-
-
-// Game Settings
-
-read_setting local.settings local.name local.type local.mapdefval local.defaultval:
-	local.gencvarname = ("g_" + level.mef_gametype + "_" + local.name)
-
-	local.gencvarval = getcvar local.gencvarname
-	local.scrval = local.settings[local.name]
-
-	if (local.mapdefval != NIL)
-	{
-		local.cvarval = waitthread cast_val local.mapdefval local.type
-	} else if (local.gencvarval != "")
-	{
-		local.cvarval = waitthread cast_val local.gencvarval local.type
-	} else if (local.scrval != NIL)
-	{
-		local.cvarval = local.scrval
-	} else
-	{
-		local.cvarval = local.defaultval
-	}
-
-	local.settings[local.name] = local.cvarval
-end
-
-
-// name::type::default value
-read_game_settings local.settings local.settingsdef:
-	local.mapcvarname = ("g_" + level.mef_gametype + "_" + level.mef_mapname + "_settings")
-	local.mapvals = (waitthread parse_options (getcvar local.mapcvarname))[1]
-
-	for (local.i = 0; local.i < local.settingsdef.size; local.i++)
-	{
-		local.setting = local.settingsdef[local.i]
-		waitthread read_setting local.settings local.setting[1] local.setting[2] local.mapvals[local.setting[1]] local.setting[3]
-	}
-	
-	local.currentcvarname = ("g_" + level.mef_gametype + "_currentsettings")
-	setcvar local.currentcvarname (waitthread dump_game_settings local.settings local.settingsdef)
-end
-
-
-dump_game_settings local.settings local.settingsdef:
-	local.str = ""
-	
-	for (local.i = 0; local.i < local.settingsdef.size; local.i++)
-	{
-		local.setting = local.settingsdef[local.i]
-
-		if (local.i != 0)
-		{
-			local.str += " "
-		}
-		local.str += (local.setting[1] + ": " + local.settings[local.setting[1]])
-	}
-end local.str
-
-
-cast_val local.val local.type:
-	switch (local.type)
-	{
-		bool:
-			local.result = bool(local.val)
-			break
-		int:
-			local.result = int(local.val)
-			break
-		float:
-			local.result = float(local.val)
-			break
-		string:
-			local.result = string(local.val)
-			break
-		default:
-			local.result = local.val
-			break
-	}
-end local.result
-
-
-read_options local.str local.setting local.options:
-	local.strlist = waitthread split_string local.str " "
-	for (local.i = 0; local.i < local.strlist.size; local.i++)
-	{
-		local.val = local.strlist[local.i]
-		
-		for (local.j = 1; local.j < (local.options.size + 1); local.j++)
-		{
-			if (local.val == local.options[local.j])
-			{
-				level.mef_settings[(local.setting + "_" + local.val)] = 1
-				break
-			}
-		}
-	}
-end
-
-
-read_position_string local.str:
+read_position_string local.str local.ent:
 	local.strlist = waitthread split_string local.str " "
 	for (local.i = 0; local.i < 4; local.i++)
 	{
@@ -454,7 +504,6 @@ read_position_string local.str:
 		local.poslist[local.poslist.size] = local.strlist[local.i]
 	}
 	
-	local.ent = spawn script_origin
 	local.ent.origin = ( (float(local.strlist[0])) (float(local.strlist[1])) (float(local.strlist[2]) ) )
 	local.ent.angles = ( 0 (float(local.strlist[3])) 0 )
 	local.ent.desc = waitthread join_string local.poslist " "
@@ -541,6 +590,173 @@ player_can_see local.player local.obj local.dist:
 		end 0
 	}
 end 1
+
+
+get_player_name local.player:
+	if (local.player == NIL || local.player == NULL)
+	{
+		end
+	}
+
+	if (local.player.netname != NIL)
+	{
+		if (local.player.netname != "")
+		{
+			end local.player.netname
+		} else
+		{
+			end
+		}
+	}
+
+	if (level.mef_playernameupdatetime == NIL || level.mef_playernameupdatetime <= level.time)
+	{
+		waitthread parse_foresight_names
+		level.mef_playernameupdatetime = level.time + 2.0
+	}
+
+	local.name = level.mef_playernames[local.player.entnum]
+	if (local.name != NIL && local.name != "")
+	{
+		end local.name
+	}
+end
+
+
+parse_foresight_names:
+	local.data = (getcvar "FST_playerNames")
+	if (local.data == level.mef_playernamestring)
+	{
+		end
+	}
+	
+	level.mef_playernamestring = local.data
+	local.names = waitthread split_string local.data ";" 1 1 "&"
+
+	level.mef_playernames = NIL
+	level.mef_playernames[0] = NIL
+
+	for (local.i = 0; local.i < local.names.size; local.i = local.i + 2)
+	{
+		level.mef_playernames[level.mef_playernames.size] = local.names[local.i]
+	}
+end
+
+
+clear_playernames:
+	if (level.mef_baseversion != "bt")
+	{
+		setcvar "FST_playerNames" ""
+	}
+end
+
+
+get_map_floor_vals local.mapname:
+	switch (local.mapname)
+	{
+		case "dm/mohdm2":
+			local.botz = -128.125
+			local.topz = -95.875
+			break
+				
+		case "obj/obj_team1":
+			local.botz = -520.125
+			local.topz = -511.875
+			break
+				
+		case "obj/obj_team3":
+			local.botz = -728.125
+			local.topz = -719.875
+			break
+		
+		case "dm/mohdm3":
+			local.botz = -224.125
+			local.topz = -215.875
+			break
+
+		case "dm/mohdm4":
+		case "obj/obj_team4":
+			local.botz = -16.125
+			local.topz = 0.125
+			break
+			
+		case "dm/mp_unterseite_dm":
+			local.botz = -656.125
+			local.topz = -639.875
+			break
+			
+		case "lib/mp_ship_lib":
+			local.botz = -576.125
+			local.topz = -511.875
+			break
+			
+		default:
+			end
+			break
+	}
+end (local.botz::local.topz)
+
+
+under_map_thread local.delay local.botz local.topz:
+	local.idx = 0
+
+	while (1)
+	{
+		if ($player.size > 0)
+		{
+			local.idx++
+		
+			if (local.idx > $player.size)
+			{
+				local.idx = 1
+			}
+		
+			local.player = $player[local.idx]
+			if (local.player != NIL && local.player != NULL && local.player.mef_pstate == "PSTATE_ALIVE" && IsAlive(local.player))
+			{
+				if (waitthread is_under_map local.player local.botz local.topz)
+				{
+					local.player takedamage
+					local.player hurt 1000
+					local.player iprint "You were killed for going under the map."
+				}
+			}
+		}
+		
+		wait local.delay
+	}
+end
+
+
+is_under_map local.player local.botz local.topz:
+	local.zlow = -8000
+	local.zhigh = 8000
+
+	local.orglow = local.player.origin
+	local.orglow[2] = local.zlow
+		
+	local.orghigh = local.player.origin
+	local.orghigh[2] = local.zhigh
+		
+	local.down = trace (local.player.origin + ( 0 0 10 )) local.orglow 1 ( -5 -5 0 ) ( 5 5 0 )
+	local.up = trace local.orglow local.orghigh
+
+//	println ("BOTZ: " + local.up[2] + " TOPZ: " + local.down[2])
+
+	if (((abs (local.down[2] - local.topz)) < 0.001) && ((abs (local.up[2] - local.botz)) < 0.001))
+	{
+		end 1
+	}
+end 0
+
+
+add_logging_settings:
+	if (!level.mef_loggingevents)
+	{
+		waitthread global/libmef/gametypes.scr::new_setting "logevents" bool 0
+		level.mef_loggingevents = 1
+	}
+end
 
 
 // Round Based Scoring System
@@ -656,7 +872,7 @@ sudden_death local.sdmins local.fsdmins:
 	local.endtime = level.time + (local.totalmins * 60)
 	local.fsdtime = level.time + (local.sdmins * 60)
 	
-	if (!level.mef_dmrespawning || local.fsdmins > 0)
+	if (local.fsdmins > 0)
 	{
 		local.autonuke = 1
 	}
@@ -689,6 +905,63 @@ sudden_death local.sdmins local.fsdmins:
 		wait 1
 	}
 end
+
+
+get_winner_score:
+	if (!level.mef_suddendeath)
+	{
+		end
+	}
+
+	local.rbwinner = waitthread global/libmef/respawn.scr::get_winner_rb
+	
+	if (local.rbwinner == NIL && level.mef_timeexpired)
+	{
+		local.rbwinner = "draw"
+	}
+
+	if (local.rbwinner == "draw")
+	{
+		if (level.mef_scoring["allies"] && level.mef_scoring["axis"])
+		{
+			// both are scoring, wait till it completes
+			local.announcescoring = 1
+		} else if (level.mef_scoring["allies"])
+		{
+			local.winner = "allies"
+		} else if (level.mef_scoring["axis"])
+		{
+			local.winner = "axis"
+		} else
+		{
+			local.winner = "draw"
+		}
+	} else if (local.rbwinner == "allies")
+	{
+		if (level.mef_scoring["axis"])
+		{
+			local.announcescoring = 1
+		} else
+		{
+			local.winner = "allies"
+		}
+	} else if (local.rbwinner == "axis")
+	{
+		if (level.mef_scoring["allies"])
+		{
+			local.announcescoring = 1
+		} else
+		{
+			local.winner = "axis"
+		}
+	}
+
+	if (local.announcescoring && !level.mef_announcedscoring)
+	{
+		iprintlnbold_noloc "A score is in progress!"
+		level.mef_announcedscoring = 1
+	}
+end local.winner
 
 
 team_scored local.team:

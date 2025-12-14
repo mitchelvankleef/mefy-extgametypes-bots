@@ -3,7 +3,7 @@
 // SCRIPTING: NED and lots of help from ZIED
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -21,39 +21,17 @@ main:
 
 	setcvar "g_scoreboardpic" "objdm1"
 
-	level.mef_mapname = "obj_team1"
-	level.mef_maptype = "obj"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"obj"::"ft"::"ctf"::"ftobj"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ftobj"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "ftobj":
-			thread global/libmef/ft.scr::ft_begin
-			thread objectivethread
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 
 		case "obj":
+		case "ftobj":
 			thread objectivethread
 			break
 	}
@@ -77,33 +55,18 @@ main:
 	exec global/ambient.scr obj_team1
 
 	level waittill spawn
-	$world farclipoverride -1
-end
-
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 end
 
 
 setup_bases:
 	waitthread global/libmef/util.scr::read_gametype_settings
 
-	// bases for dem, ftdem, ftctf, and non-respawning ctf
-	if (!(level.mef_gametype == "ctf" && level.mef_settings["respawn"]))
+	// deep bases for non-respawning dem and ftdem
+	if ((level.mef_gametype == "dem" || level.mef_gametype == "ftdem") && level.mef_deepbases && level.mef_gameversion != "aademo")
 	{
 		waitthread global/libmef/bases.scr::addbase allies "1497 4631 -228.06 -66 Sherman Tank" shermantank
 		waitthread global/libmef/bases.scr::addbase allies "2492 4123 -210.97 -90 Allied Cardtable" cardtable
@@ -113,11 +76,9 @@ setup_bases:
 		waitthread global/libmef/bases.scr::addbase axis "3788 -800 -312 -90 88mm Flak Cannon" flak88
 		waitthread global/libmef/bases.scr::addbase axis "2700 -1440 -376 -90 88mm Flak Cannon" flak88
 		waitthread global/libmef/bases.scr::addbase axis "4084 352 -304 -90 88mm Flak Cannon" flak88
-	}
-
-	// additional bases for ctf only
-	if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
+	} else
 	{
+		// additional bases for ctf & respawning dem
 		// north/south
 		waitthread global/libmef/bases.scr::addbasepair "1553 3872 -231.75 0" "3692 1031 -343.76 85"
 
@@ -126,7 +87,7 @@ setup_bases:
 
 		// northeast/southwest
 		waitthread global/libmef/bases.scr::addbasepair "2150 4885 -207 -90" "2814 557 -341.87 100"
-	}		
+	}
 end
 
 
@@ -152,6 +113,7 @@ objectivethread:
 	level.defusing_team = "axis"
 	level.planting_team = "allies"
 	level.targets_to_destroy = 1
+	level.targets_destroyed = 0
 
 	// set the parameters for this round based match
 	if (level.mef_gametype != "ftobj")
@@ -162,10 +124,7 @@ objectivethread:
 	level.clockside = axis // set to axis, allies, kills, or draw
 
 	//////////////////////////
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 	//////////////////////////
 
 
@@ -217,13 +176,7 @@ allies_win_thread:
 	while(level.targets_destroyed < level.targets_to_destroy)
 		waitframe
 	
-	if (level.mef_gametype == "ftobj")
-	{
-		waitthread global/libmef/util.scr::do_teamwin allies
-	} else
-	{
-		teamwin allies
-	}
+	waitthread global/libmef/util.scr::do_teamwin allies
 end
 
 //*** --------------------------------------------

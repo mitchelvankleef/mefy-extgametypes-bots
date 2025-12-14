@@ -7,14 +7,14 @@
 // 2 = Neutral
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (08-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
 // You are free to modify and redistribute as long as you keep these
 // credits.
 // **********************************************************************
-// Credits to Kaotik for CTF base positions
+// Credits to Kaotik for base positions
 
 //----------------------------------------------------------
 // Main
@@ -30,35 +30,17 @@ main:
 
 	setcvar "g_scoreboardpic" "mp_Berlin_tow" 
 
-	level.mef_mapname = "mp_berlin_tow"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"tow"::"ft"::"ctf"::"ftctf"::"fttow"
-	level.mef_defaultgametype = "fttow"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			// CTF Base positions by Kaotik
-			waitthread global/libmef/bases.scr::addbasepair "5436.88 1041 24.13 180 Allied Street" "-3698.8 2377.41 24.13 -135 Axis Street"
-			waitthread global/libmef/bases.scr::addbasepair "2627.81 1321.58 24.13 45 NE Riverbank" "-1548.88 1137.13 24.13 90 SE Sector Street"
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
 			break
 
 		case "tow":
-			thread towthread
-			break
-
 		case "fttow":
-			thread global/libmef/ft.scr::ft_begin
 			thread towthread
 			break
 	}
@@ -116,30 +98,16 @@ main:
 	$flak88_turret0 viewjitter 7
 	$flak88_turret0 firedelay 3
 
-	if (!level.mef_devmode && level.roundbased)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	thread start_generator_sound
 end
 
 
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "5436.88 1041 24.13 180 Allied Street" "-3698.8 2377.41 24.13 -135 Axis Street"
+	waitthread global/libmef/bases.scr::addbasepair "2627.81 1321.58 24.13 45 NE Riverbank" "-1548.88 1137.13 24.13 90 SE Sector Street"
 end
 
 
@@ -189,10 +157,7 @@ towthread:
 
 
 	//////////////////////////
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 	//////////////////////////		
 
 	thread init_switches

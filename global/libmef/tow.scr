@@ -2,9 +2,9 @@
 ================================================================================
 Tug-of-War Utility Library
 for Medal Of Honor
-Version 1.0.0 (08/15/04)
+Version 1.0.2 (05/14/05)
 
-Copyright (c) 2004 Mark Follett
+Copyright (c) 2004-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -58,9 +58,8 @@ spawner_destroyed local.team:
 		end
 	}
 
-	level.mef_team[local.team].freezemode = 0
-	level.mef_team[local.team].waverespawn = 0
-	waitthread global/libmef/ft.scr::team_shatter local.team
+	level.mef_team[local.team].nextrespawnmode = "none"
+	level.mef_team[local.team].nextwaverespawn = 0
 	level.mef_team[local.team].otherteam.respawnplayers = 1
 end
 
@@ -80,3 +79,13 @@ objective_captured local.team:
 		waitthread global/libmef/respawn.scr::set_team_respawntime level.mef_team[local.team].otherteam local.secs
 	}
 end
+
+
+get_winner_tow:
+	local.rbwinner = waitthread global/libmef/respawn.scr::get_winner_rb
+
+	if (local.rbwinner == NIL && level.mef_timeexpired)
+	{
+		local.rbwinner = waitthread global/libmef/util.scr::parse_clockside level.clockside
+	}
+end local.rbwinner

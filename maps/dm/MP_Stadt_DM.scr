@@ -1,14 +1,14 @@
 main:
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
 // You are free to modify and redistribute as long as you keep these
 // credits.
 // **********************************************************************
-// Credits to Kaotik for CTF base positions
+// Credits to Kaotik for base positions
 
 // set scoreboard messages
 setcvar "g_obj_alliedtext1" "Stadt"
@@ -20,27 +20,13 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mp_Stadt_dm"
 
-	level.mef_mapname = "mp_stadt_dm"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			// CTF Base positions by Kaotik
-			waitthread global/libmef/bases.scr::addbasepair "-2445.26 2159.13 328.13 90 SW Building" "-531.24 -1008.87 0.13 90 NE Sector"
-			waitthread global/libmef/bases.scr::addbasepair "-1475.53 3234.22 0.13 -135 Front Church" "-1881.96 372.65 -263.88 -90 E Sewer"
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
 			break
 	}
 		
@@ -69,17 +55,9 @@ setcvar "g_scoreboardpic" "mp_Stadt_dm"
 end
 //-----------------------------------------------------------------------------
 
-roundbasedthread:
 
-	// Can specify different scoreboard messages for round based games here.
-	
-	level waitTill prespawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-//	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-2445.26 2159.13 328.13 90 SW Building" "-531.24 -1008.87 0.13 90 NE Sector"
+	waitthread global/libmef/bases.scr::addbasepair "-1475.53 3234.22 0.13 -135 Front Church" "-1881.96 372.65 -263.88 -90 E Sewer"
 end

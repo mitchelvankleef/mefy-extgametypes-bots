@@ -2,9 +2,9 @@
 ================================================================================
 Server-Side Capture-The-Flag Gametype Library
 for Medal Of Honor
-Version 1.3.7 (11/15/04)
+Version 1.4.2 (05/14/05)
 
-Copyright (c) 2003-2004 Mark Follett
+Copyright (c) 2003-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,12 +28,92 @@ SOFTWARE.
 */
 
 
+register_gametypes:
+	level.mef_gametypes["ctf"] = global/libmef/ctf.scr::init_gametype
+	level.mef_gametypes["ftctf"] = global/libmef/ctf.scr::init_gametype
+end
+
+
+init_gametype:
+	switch (self.gametype)
+	{
+		case "ctf":
+			self.gametypestring = "Capture-The-Flag"
+			break
+		
+		case "ftctf":
+			self.gametypestring = "Freeze-Tag-CTF"
+			break
+	}
+	
+	if (level.mef_maptype == "obj")
+	{
+		self.basegametype = 4
+	} else
+	{
+		self.basegametype = 3
+	}
+
+	waitthread global/libmef/gametypes.scr::new_setting "pointlimit"     int  4
+	waitthread global/libmef/gametypes.scr::new_setting "suddendeath"    int  5
+	waitthread global/libmef/gametypes.scr::new_setting "fsuddendeath"   int  2
+	waitthread global/libmef/gametypes.scr::new_setting "returnboth"     bool 0
+	waitthread global/libmef/gametypes.scr::new_setting "countdown"      int 15
+	waitthread global/libmef/gametypes.scr::new_setting "returnpress"    int 15
+	waitthread global/libmef/gametypes.scr::new_setting "capturepress"   int 20
+	waitthread global/libmef/gametypes.scr::new_setting "drophold"       int -1
+	waitthread global/libmef/gametypes.scr::new_setting "friendlyreturn" int  7
+	waitthread global/libmef/gametypes.scr::new_setting "enemyreturn"    int -1
+	waitthread global/libmef/gametypes.scr::new_setting "groundreturn"   int 25
+	waitthread global/libmef/gametypes.scr::new_setting "dropdelay"      int 20
+	waitthread global/libmef/gametypes.scr::new_setting "announce"       options "dropped atbase" "captured dropped atbase abbr"
+	waitthread global/libmef/gametypes.scr::new_setting "announcefreq"   int  8
+
+	waitthread global/libmef/util.scr::add_logging_settings
+
+	if (self.gametype == "ctf")
+	{
+		waitthread global/libmef/gametypes.scr::new_setting "respawn" bool 1
+	}
+	
+	if (self.gametype == "ftctf")
+	{
+		waitthread global/libmef/ft.scr::add_freezetag_settings
+	}
+
+	waitthread global/libmef/gametypes.scr::add_roundbased_settings
+	waitthread global/libmef/spectate.scr::add_spectate_settings
+	waitthread global/libmef/respawn.scr::add_respawncontrol_settings
+
+	self.settingsthread = global/libmef/ctf.scr::process_settings
+	
+	thread ctf_begin
+end
+
+
+process_settings:
+	if (level.mef_gametype == "ftctf" || (level.mef_gametype == "ctf" && !level.mef_settings["respawn"]))
+	{
+		level.mef_deepbases = 1
+	}
+	waitthread global/libmef/spectate.scr::process_settings
+end
+
+
 ctf_begin:
+	if (level.ctf_running)
+	{
+		end
+	}
+
 	level.ctf_running = 1
-	level.ctf_version = "1.3.7"
-	setcvar "g_ctf_version" level.ctf_version
+	
+	level waittill prespawn
+	
+	level.ctf_version = "1.4.2"
 
 	waitthread global/libmef/util.scr::read_gametype_settings
+	thread global/libmef/respawn.scr::respawncontrol_thread
 	
 	level.mef_settings["button_fov"] = 60
 	level.mef_settings["button_pressdist"] = 96
@@ -42,36 +122,41 @@ ctf_begin:
 	{
 		if (level.mef_settings["respawn"])
 		{
-			level.mef_dmrespawning = 1
-			level.mef_allies.respawn = 1
-			level.mef_axis.respawn = 1
+			level.mef_respawnmode = "full"
+			local.waverespawn = 0
 		} else
 		{
-			level.mef_dmrespawning = 0
-			level.mef_allies.respawn = 0
-			level.mef_allies.waverespawn = 1
-			level.mef_axis.respawn = 0
-			level.mef_axis.waverespawn = 1
+			level.mef_respawnmode = "none"
+			level.ctf_baserespawnmode = "none"
+			local.waverespawn = 1
+			level.mef_lockspawns = 1
 		}
 		local.gtypename = "Capture-The-Flag"
 	} else
 	{
-		level.mef_dmrespawning = 0
+		level.mef_respawnmode = "ft"
+		level.ctf_baserespawnmode = "ft"
 		level.mef_freezemode = 1
-		level.mef_allies.respawn = 0
-		level.mef_allies.freezemode = 1
-		level.mef_allies.waverespawn = 1
-		level.mef_axis.respawn = 0
-		level.mef_axis.freezemode = 1
-		level.mef_axis.waverespawn = 1
+		local.waverespawn = 1
+		level.mef_lockspawns = 1
 		local.gtypename = "Freeze-Tag-CTF"
 	}
+
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_allies level.mef_respawnmode local.waverespawn
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_axis level.mef_respawnmode local.waverespawn
 
 	level.mef_pchudenabled = 1
 	level.mef_pchudx = 10
 	level.mef_pchudy = -200
 
-	level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_score
+	level.mef_checkwinthread = global/libmef/util.scr::get_winner_score
+
+	level.ctf_logstrings["posted"] = "POST"
+	level.ctf_logstrings["saved"] = "SAVE"
+	level.ctf_logstrings["returned"] = "RETURN"
+	level.ctf_logstrings["picked up"] = "PICKUP"
+	level.ctf_logstrings["captured"] = "CAPTURE"
+	level.ctf_logstrings["dropped"] = "DROP"
 
 	level.mef_credits[0] = (local.gtypename + " MOD")
 	level.mef_credits[1] = ("Version " + level.ctf_version)
@@ -80,15 +165,13 @@ ctf_begin:
 	level.mef_credits[4] = "mefy"
 	level.mef_credits[5] = ""
 
-	if (level.mef_maptype == "obj")
+	if (level.mef_basegametype == 4)
 	{
-		level.mef_basegametype = 4 // Objective-Match
 		setcvar "g_obj_axistext1" (local.gtypename + " MOD")
 		setcvar "g_obj_axistext2" "by Mefy"
 		setcvar "g_obj_axistext3" ""
 	} else
 	{
-		level.mef_basegametype = 3 // Round-Based-Match
 		setcvar "g_obj_axistext1" ""
 		setcvar "g_obj_axistext2" (local.gtypename + " MOD")
 		setcvar "g_obj_axistext3" "by Mefy"
@@ -105,13 +188,9 @@ ctf_begin:
 		setcvar "g_obj_alliedtext2" "the enemy's flag at"
 	}
 
-	setcvar "g_gametype" level.mef_basegametype
-
 	waitthread global/libmef/mapdesc.scr::setup_map level.mef_mapname
 
 	level.ctf_bases = waitthread global/libmef/bases.scr::read_base_settings level.mef_settings "both"
-
-	level waittill prespawn
 
 	level.dmroundlimit = 12 // round time limit in minutes
 
@@ -119,10 +198,7 @@ ctf_begin:
 
 	level waittill spawn
 
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	while (!level.mef_basesspawned)
 	{
@@ -156,37 +232,6 @@ ctf_begin:
 		thread respawnmode_thread
 		thread flagcheck_thread
 	}
-end
-
-
-read_game_settings:
-	local.settingsdef[0]  = "pointlimit"::int::4
-	local.settingsdef[1]  = "suddendeath"::int::5
-	local.settingsdef[2]  = "fsuddendeath"::int::2
-	local.settingsdef[3]  = "returnboth"::bool::0
-	local.settingsdef[4]  = "countdown"::int::15
-	local.settingsdef[5]  = "returnpress"::int::15
-	local.settingsdef[6]  = "capturepress"::int::20
-	local.settingsdef[7]  = "drophold"::int:: -1
-	local.settingsdef[8]  = "friendlyreturn"::int::7
-	local.settingsdef[9]  = "enemyreturn"::int:: -1
-	local.settingsdef[10] = "groundreturn"::int::25
-	local.settingsdef[11] = "dropdelay"::int::20
-	local.settingsdef[12] = "announce"::options::"dropped atbase"
-	local.settingsdef[13] = "announcefreq"::int::8
-	
-	if (level.mef_gametype == "ctf")
-	{
-		local.settingsdef[14] = "respawn"::bool::1
-	}
-	
-	if (level.mef_gametype == "ftctf")
-	{
-		waitthread global/libmef/ft.scr::append_ft_settingsdef local.settingsdef
-	}
-
-	waitthread global/libmef/util.scr::read_game_settings level.mef_settings local.settingsdef
-	waitthread global/libmef/util.scr::read_options level.mef_settings["announce"] "announce" captured::dropped::atbase::abbr
 end
 
 
@@ -224,21 +269,21 @@ flagcheck_thread:
 			if (local.newstate == "onecapped" || local.newstate == "bothcapped")
 			{
 				local.secs = 4
-				level.ctf_respawning = 1
+				level.ctf_respawnmode = "full"
 				level.ctf_respawntime = level.time + local.secs
-				if (!level.mef_dmrespawning)
+				if (level.mef_respawnmode != "full")
 				{
 					iprintlnbold_noloc ("Respawning enabled in " + local.secs + " seconds.")
 				}
 			} else
 			{
 				local.secs = 10
-				level.ctf_respawning = 0
+				level.ctf_respawnmode = level.ctf_baserespawnmode
 				level.ctf_respawntime = level.time + local.secs
 
-				if (level.mef_dmrespawning)
+				if (level.mef_respawnmode == "full")
 				{
-					if (level.mef_freezemode)
+					if (level.ctf_respawnmode == "ft")
 					{
 						iprintlnbold_noloc ("Warning: Freeze Tag respawning in " + local.secs + " seconds.")
 					} else
@@ -257,29 +302,24 @@ end
 
 
 respawnmode_thread:
-	level.ctf_respawning = level.mef_dmrespawning
+	level.ctf_respawnmode = level.mef_respawnmode
 
 	while (!level.mef_gameover && !level.mef_fsuddendeath)
 	{
 		if (level.ctf_respawntime != NIL && level.time >= level.ctf_respawntime)
 		{
-			if (level.ctf_respawning != level.mef_dmrespawning)
+			if (level.ctf_respawnmode != level.mef_respawnmode)
 			{
-				if (level.ctf_respawning)
+				level.mef_respawnmode = level.ctf_respawnmode
+				level.mef_allies.nextrespawnmode = level.mef_respawnmode
+				level.mef_axis.nextrespawnmode = level.mef_respawnmode
+				
+				if (level.mef_respawnmode == "full")
 				{
-					level.mef_dmrespawning = 1
-					level.mef_allies.respawnplayers = 1
-					level.mef_axis.respawnplayers = 1
-					level.mef_allies.respawn = 1
-					level.mef_axis.respawn = 1
 					iprintlnbold_noloc "Full respawning enabled."
 				} else
 				{
-					level.mef_dmrespawning = 0
-					level.mef_allies.respawn = 0
-					level.mef_axis.respawn = 0
-					
-					if (level.mef_freezemode)
+					if (level.mef_respawnmode == "ft")
 					{
 						iprintlnbold_noloc "Freeze Tag respawning enabled."
 					} else
@@ -382,7 +422,7 @@ flag_picked_up:
 end
 
 
-attach_flag_to_entity local.flag local.entity local.team local.event:
+attach_flag_to_entity local.flag local.entity local.team local.event local.player:
 	while (!local.flag.candetach)
 	{
 		waitframe
@@ -402,6 +442,7 @@ attach_flag_to_entity local.flag local.entity local.team local.event:
 		local.flag.carrier.ctf_flags[local.flag.team] = local.flag
 		local.flag.entteam = local.team
 		local.flag.event = local.event
+		local.flag.evtplayer = local.player
 	}
 end
 
@@ -422,7 +463,7 @@ flag_main_thread local.flag:
 
 		if (local.flag.event)
 		{
-			waitthread announce_flag_position local.flag local.flag.entteam local.flag.event
+			waitthread announce_flag_position local.flag local.flag.entteam local.flag.event local.flag.evtplayer
 		}
 
 		waitthread update_flag_position_text local.flag
@@ -497,7 +538,15 @@ flag_hit_spot:
 
 	if (local.flag != NIL && local.player.dmteam == self.dropteam)
 	{
-		waitthread attach_flag_to_entity local.flag self.base self.base.team "atbase"
+		if (local.player.dmteam == local.flag.team)
+		{
+			local.event = "returned"
+		} else
+		{
+			local.event = "posted"
+		}
+		
+		waitthread attach_flag_to_entity local.flag self.base self.base.team local.event local.player
 	}
 end
 
@@ -732,12 +781,28 @@ button_pressed_event local.button local.player:
 		// press a button to return a flag
 		if (local.player.ctf_flags["allies"] != NIL)
 		{
-			waitthread attach_flag_to_entity local.player.ctf_flags["allies"] local.flagbase local.flagbase.team "atbase"
+			if (local.player.dmteam == "allies")
+			{
+				local.event = "returned"
+			} else
+			{
+				local.event = "posted"
+			}
+			
+			waitthread attach_flag_to_entity local.player.ctf_flags["allies"] local.flagbase local.flagbase.team local.event local.player
 		}
 		
 		if (local.player.ctf_flags["axis"] != NIL)
 		{
-			waitthread attach_flag_to_entity local.player.ctf_flags["axis"] local.flagbase local.flagbase.team "atbase"
+			if (local.player.dmteam == "axis")
+			{
+				local.event = "returned"
+			} else
+			{
+				local.event = "posted"
+			}
+
+			waitthread attach_flag_to_entity local.player.ctf_flags["axis"] local.flagbase local.flagbase.team local.event local.player
 		}
 	} else
 	{
@@ -774,12 +839,26 @@ attach_flag_to_player local.flag local.player:
 		thread flag_check_drop local.flag local.player
 	}
 	
+	thread msg_player local.player ("You have captured the " + level.mef_team[local.flag.team].desc + " flag!")
+	
 	if ((local.flag.team == local.player.dmteam) && (level.mef_settings["friendlyreturn"] > 0))
 	{
-		thread check_flag_return local.flag local.player level.mef_settings["friendlyreturn"]
+		thread check_flag_return local.flag local.player level.mef_settings["friendlyreturn"] "returned"
 	} else if ((local.flag.team != local.player.dmteam) && (level.mef_settings["enemyreturn"] > 0))
 	{
-		thread check_flag_return local.flag local.player level.mef_settings["enemyreturn"]
+		thread check_flag_return local.flag local.player level.mef_settings["enemyreturn"] "atbase"
+	}
+end
+
+
+msg_player local.player local.msg:
+	local.team = local.player.dmteam
+	
+	waitframe
+
+	if (local.player != NULL && local.player.dmteam == local.team)
+	{
+		local.player iprint local.msg
 	}
 end
 
@@ -813,12 +892,30 @@ end
 
 
 player_got_flag local.flag local.player:
-	if ((local.flag.team == local.player.dmteam) && (level.mef_settings["friendlyreturn"] == 0))
+	if (local.flag.carrier != level.ctf_ground)
 	{
-		waitthread attach_flag_to_entity local.flag level.ctf_bases[local.flag.team] local.flag.team "atbase"		
+		if (local.player.dmteam == local.flag.team)
+		{
+			local.event = "saved"
+		} else
+		{
+			local.event = "captured"
+		}
 	} else
 	{
-		waitthread attach_flag_to_entity local.flag local.player local.player.dmteam "captured"
+		local.event = "picked up"
+	}
+
+	if ((local.flag.team == local.player.dmteam) && (level.mef_settings["friendlyreturn"] == 0))
+	{
+		if (local.event != "saved")
+		{
+			local.event = "returned"
+		}
+		waitthread attach_flag_to_entity local.flag level.ctf_bases[local.flag.team] local.flag.team local.event local.player		
+	} else
+	{
+		waitthread attach_flag_to_entity local.flag local.player local.player.dmteam local.event local.player
 	}
 end
 
@@ -830,7 +927,7 @@ player_dropped_flag local.flag local.player local.team local.lastpos:
 	} else
 	{
 		local.flag.lastpos = local.lastpos
-		waitthread attach_flag_to_entity local.flag level.ctf_ground local.team "dropped"
+		waitthread attach_flag_to_entity local.flag level.ctf_ground local.team "dropped" local.player
 	}
 end
 
@@ -942,7 +1039,7 @@ attach_flag_to_ground local.flag local.ground:
 
 	if (level.mef_settings["groundreturn"] > 0)
 	{
-		thread check_flag_return local.flag local.ground level.mef_settings["groundreturn"]
+		thread check_flag_return local.flag local.ground level.mef_settings["groundreturn"] "atbase"
 	}
 end
 
@@ -984,7 +1081,7 @@ reset_flag local.flag local.carrier local.delay:
 end
 
 
-check_flag_return local.flag local.carrier local.delay:
+check_flag_return local.flag local.carrier local.delay local.event:
 	local.counter = 0
 	local.signal = local.flag.signal
 	
@@ -993,7 +1090,7 @@ check_flag_return local.flag local.carrier local.delay:
 		local.counter++
 		if (local.counter >= local.delay)
 		{
-			waitthread attach_flag_to_entity local.flag level.ctf_bases[local.flag.team] local.flag.team "atbase"		
+			waitthread attach_flag_to_entity local.flag level.ctf_bases[local.flag.team] local.flag.team local.event local.carrier
 			end
 		}
 		wait 1
@@ -1054,25 +1151,54 @@ update_hud_display:
 end
 
 
-announce_flag_position local.flag local.team local.action:
-	local.teamprefix["allies"] = "Allies have "
-	local.teamprefix["axis"] = "Axis has "
-	local.flagdesc["allies"] = "Allied"
-	local.flagdesc["axis"] = "Axis"
-
+announce_flag_position local.flag local.team local.action local.player:
 	switch (local.action)
 	{
+		case "posted":
+		case "saved":
+		case "returned":
+		case "picked up":
 		case "captured":
 		case "dropped":
-			local.str = local.teamprefix[local.team] + local.action + " the " + local.flagdesc[local.flag.team] + " flag!"
+			if (local.team == "allies")
+			{
+				local.str = "Allied player "
+			} else
+			{
+				local.str = "Axis player "
+			}
+
+			local.name = waitthread global/libmef/util.scr::get_player_name local.player
+			if (local.name != NIL)
+			{
+				local.str += ("(" + local.name + ") ")
+				
+				if (level.mef_settings["logevents"])
+				{
+					println ("MEF " + level.ctf_logstrings[local.action] + " " + local.flag.team + " " + (waitthread global/libmef/util.scr::escape_string local.name " " "&"))
+				}
+			}
+
+			local.str += (local.action + " the " + level.mef_team[local.flag.team].desc + " flag!")
 			break
 			
 		case "atbase":
-			local.str = "The " + local.flagdesc[local.flag.team] + " flag is at the " + local.flagdesc[local.team] + " base!"
+			local.str = "The " + level.mef_team[local.flag.team].desc + " flag is at the " + level.mef_team[local.team].desc + " base!"
 			break
 	}
 	
-	if (level.mef_settings[("announce_" + local.action)])
+	if (local.flag.carrier == level.ctf_ground)
+	{
+		local.type = "dropped"
+	} else if (local.flag.carrier.classname == "Player")
+	{
+		local.type = "captured"
+	} else
+	{
+		local.type = "atbase"
+	}
+	
+	if (level.mef_settings[("announce_" + local.type)])
 	{
 		local.str += (waitthread get_flag_full_desc local.flag)
 	}
@@ -1170,7 +1296,7 @@ update_flag_position_text local.flag:
 	
 	if (local.desc != "")
 	{
-		local.desc = " " + local.brackets[0] + local.desc + local.brackets[1]
+		local.desc = local.brackets[0] + local.desc + local.brackets[1]
 	}	
 
 	switch (local.team)

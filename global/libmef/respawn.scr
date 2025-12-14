@@ -2,9 +2,9 @@
 ================================================================================
 Respawning Control Library
 for Medal Of Honor
-Version 1.0.2 (09/28/04)
+Version 1.2.1 (05/14/05)
 
-Copyright (c) 2004 Mark Follett
+Copyright (c) 2004-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,15 +29,7 @@ SOFTWARE.
 
 
 respawncontrol_thread:
-	if (!(level.mef_gametype == "ft" || level.mef_gametype == "ftobj" || level.mef_gametype == "fttow" || level.mef_gametype == "ctf" || level.mef_gametype == "ftctf" || level.mef_gametype == "dem" || level.mef_gametype == "ftdem"))
-	{
-		end
-	}
-
-	level.mef_players[0] = NIL
-	level.mef_nextplayerid = 0
-
-	level.mef_weaponclasses = waitthread setup_weapon_classes
+	thread global/libmef/spectate.scr::monitor_player_state
 
 	level.mef_allowjointime = int(getcvar "g_allowjointime")
 
@@ -46,37 +38,6 @@ respawncontrol_thread:
 		level.mef_allowjointime = 30
 	}
 
-	local.observeoptions = getcvar "g_mef_observe"
-	if (local.observeoptions == "")
-	{
-		local.observeoptions = "bodies"
-	}
-	
-	waitthread global/libmef/util.scr::read_options local.observeoptions "observe" freefloat::bodies::builtin
-	level.mef_observe_switchtargetkey = "use"
-	level.mef_observe_msgstring = waitthread make_observer_msg_string
-
-	level.mef_inactiveping = int(getcvar "g_inactivespectate")
-
-	if (level.mef_inactiveping <= 0)
-	{
-		level.mef_inactiveping = 0
-	} else
-	{
-		level.mef_inactiveping = level.mef_inactiveping - 17
-		if (level.mef_inactiveping < 1)
-		{
-			level.mef_inactiveping = 1
-		}
-	}
-
-	if (!level.mef_settings["observe_builtin"])
-	{
-		level.mef_removeturrets = 1
-	}
-
-	level waittill prespawn
-
 	level.dmrespawning = 1
 
 	if (level.mef_basegametype == 5)
@@ -84,36 +45,29 @@ respawncontrol_thread:
 		setcvar "sv_team_spawn_interval" "0"
 	}
 
+	level.mef_pstatecallbacks.joined_server = global/libmef/respawn.scr::player_joined_server
+	level.mef_pstatecallbacks.left_server = global/libmef/respawn.scr::player_left_server
+	level.mef_pstatecallbacks.joined_team = global/libmef/respawn.scr::player_joined_team
+	level.mef_pstatecallbacks.left_team = global/libmef/respawn.scr::player_left_team
+	level.mef_pstatecallbacks.entered_game = global/libmef/respawn.scr::player_entered_game
+	level.mef_pstatecallbacks.spawned = global/libmef/respawn.scr::player_spawned
+	level.mef_pstatecallbacks.died = global/libmef/respawn.scr::player_died
+	level.mef_pstatecallbacks.revived = global/libmef/respawn.scr::player_revived
+	level.mef_pstatecallbacks.update_round = global/libmef/respawn.scr::update_round_state
+
 	level waittill spawn
 	
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
-	
-	if (level.mef_pchudenabled)
-	{
-		waitthread global/libmef/hud.scr::init_playercount_hud level.mef_pchudx level.mef_pchudy
-	}
+	level.dmrespawning = 1
 
-	if (level.mef_removeturrets && !level.mef_dontremoveturrets)
-	{
-		if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
-		{
-			removeclass FixedTurret
-			removeclass PortableTurret
-			removeclass CarryableTurret
-		}
-		removeclass TurretGun
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	if (level.mef_freezemode)
 	{
 		waitthread global/libmef/ft.scr::init_ft_respawnmode
 	}
-	
-	local.delay = int (getcvar "g_mef_team_spawn_interval")
-	if (local.delay <= 0)
+
+	local.delay = level.mef_settings["mef_team_spawn_interval"]
+	if (local.delay == NIL || local.delay <= 0)
 	{
 		local.delay = 0
 	}
@@ -125,637 +79,65 @@ respawncontrol_thread:
 
 	waitthread start_round
 
-	thread player_check_loop
-	thread round_timer
+	wait 1.0
+	
+	level.dmrespawning = 1
 end
 
 
-make_observer_msg_string:
-	if (level.mef_observe_switchtargetkey == "use")
+add_respawncontrol_settings:
+	waitthread global/libmef/gametypes.scr::new_setting "mef_team_spawn_interval" int 0
+end
+
+
+update_round_state:
+	waitthread update_player_count
+		
+	waitthread check_round_state
+		
+	if (level.mef_nuketeam != NIL)
 	{
-		local.switchtarget = "Use(e)"
-		local.freefloat = "Fire"
-	} else
-	{
-		local.switchtarget = "Fire"
-		local.freefloat = "Use(e)"
-	}
-
-	local.str = "Press " + local.switchtarget + " to follow a different player."
-	
-	if (level.mef_settings["observe_freefloat"])
-	{
-		local.str += (" Press " + local.freefloat + " to free spectate.")
-	}
-end local.str
-
-
-setup_weapon_classes:
-	// Allied Assault
-	local.classes["models/weapons/m1_garand.tik"] = "rifle"
-	local.classes["models/weapons/kar98.tik"] = "rifle"
-	local.classes["models/weapons/thompsonsmg.tik"] = "smg"
-	local.classes["models/weapons/mp40.tik"] = "smg"
-	local.classes["models/weapons/bar.tik"] = "mg"
-	local.classes["models/weapons/mp44.tik"] = "mg"
-	local.classes["models/weapons/springfield.tik"] = "sniper"
-	local.classes["models/weapons/kar98sniper.tik"] = "sniper"
-	local.classes["models/weapons/bazooka.tik"] = "heavy"
-	local.classes["models/weapons/panzerschreck.tik"] = "heavy"
-	local.classes["models/weapons/shotgun.tik"] = "shotgun"
-
-	// Spearhead
-	local.classes["models/weapons/fg42.tik"] = "rifle"
-	local.classes["models/weapons/mosin_nagant_rifle.tik"] = "rifle"
-	local.classes["models/weapons/enfield.tik"] = "rifle"
-	local.classes["models/weapons/svt_rifle.tik"] = "sniper"
-	local.classes["models/weapons/g43.tik"] = "sniper"
-	local.classes["models/weapons/ppsh_smg.tik"] = "smg"
-	local.classes["models/weapons/sten.tik"] = "smg"
-	local.classes["models/weapons/kar98_mortar.tik"] = "shotgun"
-
-	// Breakthrough
-	local.classes["models/weapons/delisle.tik"] = "shotgun"
-	local.classes["models/weapons/it_w_carcano.tik"] = "rifle"
-	local.classes["models/weapons/uk_w_l42a1.tik"] = "sniper"
-	local.classes["models/weapons/it_w_moschetto.tik"] = "smg"
-	local.classes["models/weapons/it_w_breda.tik"] = "mg"
-	local.classes["models/weapons/uk_w_vickers.tik"] = "mg"
-	local.classes["models/weapons/uk_w_piat.tik"] = "heavy"
-	local.classes["models/weapons/us_w_minedetector.tik"] = "landmine"
-	local.classes["models/weapons/gr_w_minedetector.tik"] = "landmine"
-end local.classes
-
-
-get_player_weaponclass local.player:
-	if (level.mef_baseversion == "bt")
-	{
-		end local.player.getcurrentdmweapontype
-	}
-
-	local.team = local.player.dmteam
-	local.maxframes = 30
-	local.numframes = 0
-	local.weapon = NULL
-	local.tname = "mefgun" + local.player.mef_playerid
-	while (local.player != NULL && local.player.dmteam == local.team)
-	{
-		local.player weaponcommand dual targetname local.tname
-		local.weapon = $(local.tname)
-		if (local.weapon != NULL || local.numframes > local.maxframes)
-		{
-			break
-		}
-		waitframe
-		local.numframes++
+		waitthread nuke_team level.mef_nuketeam
+		level.mef_nuketeam = NIL
 	}
 	
-	if (local.weapon != NULL)
-	{
-		local.weapon.targetname = NIL
-		local.weaponclass = level.mef_weaponclasses[local.weapon.model]
-	}
-
-	if (local.weaponclass == NIL)
-	{
-		local.weaponclass = "rifle"
-	}
-end local.weaponclass
-
-
-respawn_player local.player:
-	local.team = local.player.dmteam
-
-	local.player physics_on
-
-	// dont respawn immediately if the player was just killed
-	if (!IsAlive(local.player))
-	{
-		local.endtime = level.time + 3.0
-		local.player.mef_pstate = "PSTATE_SPAWNING"
-
-		while (local.player != NULL && local.player.dmteam == local.team)
-		{
-			if (IsAlive(local.player))
-			{
-				// the player respawned themselves, no need to force
-				break
-			}
-			
-			if (level.time >= local.endtime)
-			{
-				// time is up and the player is still dead, force them to respawn	
-				local.player respawn
-				break
-			}
-			
-			waitframe
-		}
-
-		// player left the game, left the team, or state changed: do nothing
-	} else if (local.player.mef_pstate != "PSTATE_DEAD")
-	{
-		if (!level.mef_settings["observe_builtin"])
-		{
-			local.player respawn
-		} else
-		{
-			local.player primarydmweapon local.player.mef_weaponclass
-			waitframe
-		}
+	waitthread check_team_state level.mef_allies
+	waitthread check_team_state level.mef_axis
+	waitthread check_wave_killed
 		
-		local.player.mef_auxdata.spawnwatcher.spawned = 1
-	}
-end
-
-
-unspawn_player local.player:
-	local.team = local.player.dmteam
-
-	if (!level.mef_settings["observe_builtin"])
+	if (!level.mef_gameover)
 	{
-		local.player takeall
-		local.player hide
-		local.player notsolid
-		local.player noclip
-		thread spectating_thread local.player
-		local.unspawned = 1
-	} else
-	{
-		local.player.mef_pstate = "PSTATE_UNSPAWNING"
-		local.player hide
-		local.player notsolid
-		local.player.mef_weaponclass = waitthread get_player_weaponclass local.player
-
-		if (local.player != NULL && local.player.dmteam == local.team && !level.mef_disablespectating)
+		if (level.mef_checkwinthread != NIL)
 		{
-			local.player primarydmweapon ""
-			waitframe
-
-			if (local.player != NULL && local.player.dmteam == local.team)
-			{
-				local.player stufftext "popmenu SelectPrimaryWeapon"
-				local.unspawned = 1
-			}
+			local.winner = waitthread level.mef_checkwinthread
 		}
-	}
 	
-	if (local.unspawned)
-	{
-		waitthread spectate_message local.player
-		local.player.mef_pstate = "PSTATE_UNSPAWNED"
-	}
-end
-
-
-spectating_thread local.player:
-	local.trigger = local.player.mef_auxdata.spawnwatcher
-
-	if (local.trigger.spectatethread)
-	{
-		end
-	}
-	
-	local.trigger.spectatethread = 1
-	local.team = local.player.dmteam
-	local.target = NULL
-	local.useheld = 1
-	local.fireheld = 1
-	
-	local.nextping = level.time + level.mef_inactiveping
-
-	// wait a frame so the player is hidden before they start observing another player
-	waitframe
-
-	while (local.player != NULL && local.player.dmteam == local.team && local.player.mef_spectator && !level.mef_disablespectating)
-	{
-		if (local.oldphysics != local.physics)
+		if (local.winner != NIL)
 		{
-			if (local.physics)
+			if (level.mef_autonuke)
 			{
-				local.player physics_on
-			} else
-			{
-				local.player physics_off
-			}
-			
-			local.oldphysics = local.physics
-		}
-
-		if (local.player.useheld)
-		{
-			if (!local.useheld)
-			{
-				if (level.mef_observe_switchtargetkey == "use")
-				{
-					local.switchtarget = 1
-				} else
-				{
-					if (level.mef_settings["observe_freefloat"])
-					{
-						local.freefloat = 1
-					}
-				}
-				local.useheld = 1
-			}
-		} else
-		{
-			local.useheld = 0
-		}
-		
-		if (local.player.fireheld)
-		{
-			if (!local.fireheld)
-			{
-				if (level.mef_observe_switchtargetkey == "fire")
-				{
-					local.switchtarget = 1
-				} else
-				{
-					if (level.mef_settings["observe_freefloat"])
-					{
-						local.freefloat = 1
-					}
-				}
-				local.fireheld = 1
-			}
-		} else
-		{
-			local.fireheld = 0
-		}
-
-		if (!(local.target == NIL || (local.target != NULL && (local.target.dmteam == local.player.dmteam || local.player.mef_team.numplayers == 0) && ((local.target.mef_pstate == "PSTATE_ALIVE") || (level.mef_settings["observe_bodies"] && local.target.mef_auxdata.frozenbody != NIL)))))
-		{
-			local.switchtarget = 1
-		}
-		
-		if (local.freefloat)
-		{
-			if (local.target != NIL)
-			{
-				local.target = NIL
-			} else
-			{
-				local.switchtarget = 1
-			}
-
-			local.freefloat = 0
-		}
-
-		if (local.switchtarget)
-		{
-			local.alive = NIL
-			local.ghost = NIL
-			local.alive[0] = NIL
-			local.ghost[0] = NIL
-
-			for (local.i = 0; local.i < level.mef_players.size; local.i++)
-			{
-				local.postarget = level.mef_players[local.i].player
-		
-				if (local.postarget == NIL || (local.postarget != NULL && (local.postarget.dmteam == local.player.dmteam || local.player.mef_team.numplayers == 0) && ((local.postarget.mef_pstate == "PSTATE_ALIVE") || (level.mef_settings["observe_bodies"] && local.postarget.mef_auxdata.frozenbody != NIL))))
-				{
-					if (local.postarget.mef_pstate == "PSTATE_ALIVE")
-					{
-						local.alive[local.alive.size] = local.postarget
-					} else
-					{
-						local.ghost[local.ghost.size] = local.postarget
-					}
-				}
-			}
-	
-			for (local.i = 0; local.i < local.ghost.size; local.i++)
-			{
-				local.alive[local.alive.size] = local.ghost[local.i]
-			}
-	
-			for (local.i = 0; local.i < local.alive.size; local.i++)
-			{
-				if (local.target == local.alive[local.i])
-				{
-					break
-				}
-			}
-	
-			local.i++
-			if (local.i >= local.alive.size)
-			{
-				local.i = 0
-			}
-	
-			if (local.alive.size == 0)
-			{
-				if (level.mef_allies.numplayers == 0 && level.mef_axis.numplayers == 0)
-				{
-					local.target = NIL
-				} else
-				{
-					local.target = NULL
-				}
-			} else
-			{
-				local.target = local.alive[local.i]
-			}
-
-			local.switchtarget = 0
-		}
-		
-		if (local.target != NIL && local.target != NULL)
-		{
-			if (local.target.mef_pstate == "PSTATE_ALIVE")
-			{
-				local.physics = 0
-				
-				if ((local.target getposition) == "crouching")
-				{
-					local.specorg = local.target.origin + ( 0 0 50 )
-					local.hoffset = 15
-				} else
-				{
-					local.specorg = local.target.origin + ( 0 0 100 )
-					local.hoffset = 0
-				}
-				
-				local.specang = local.target.viewangles
-			} else
-			{
-				local.physics = 1
-				local.hoffset = -5
-				local.specorg = local.target.mef_auxdata.frozenbody.specorg
-				local.specang = local.player.viewangles
-			}
-
-			local.player.origin = (trace local.specorg (local.specorg + ( 0 0 local.hoffset ) + ((angles_toforward local.specang) * -50)) 1) - ( 0 0 82.125 )
-			local.player.viewangles = local.specang
-		} else if (local.target == NIL)
-		{
-			local.physics = 1
-		}
-
-		if (level.mef_inactiveping > 0 && level.time > local.nextping)
-		{
-			local.player stufftext "+moveup; wait 100; -moveup"
-			local.nextping = level.time + level.mef_inactiveping
-		}
-		
-		waitframe
-	}
-
-	if (local.trigger != NULL)
-	{
-		local.trigger.spectatethread = NIL
-	}
-end
-
-
-new_spawnwatcher local.player:
-	// credits to jv_map for this trick
-	local.ent = spawn trigger_multiple
-	local.ent setsize ( -16 -16 -16) (16 16 16)
-	local.ent glue local.player
-	local.ent.watchplayer = local.player
-	local.ent.team = local.player.dmteam
-	local.ent.active = 0
-	local.ent nottriggerable
-	local.player.mef_auxdata.spawnwatcher = local.ent
-	local.ent setthread spawn_triggered
-	thread player_respawn_thread local.player local.ent
-end
-
-
-remove_spawnwatcher local.auxdata:
-	if (local.auxdata.spawnwatcher != NIL)
-	{
-		local.auxdata.spawnwatcher remove
-		local.auxdata.spawnwatcher = NIL
-	}
-end
-
-
-spawn_triggered:
-	local.player = parm.other
-	if (local.player != NULL && local.player == self.watchplayer && local.player.dmteam == self.team && self.active)
-	{
-		self.spawned = 1
-	}
-end
-
-
-player_respawn_thread local.player local.trigger:
-	local.team = local.player.dmteam
-	local.spectator = local.player.mef_spectator
-	
-	while (local.player != NULL && local.player.dmteam == local.team)
-	{
-		if (local.spectator && (!local.player.mef_spectator || level.mef_disablespectating))
-		{
-			local.spectator = 0
-			if (!local.trigger.spawned)
-			{
-				waitthread respawn_player local.player
-				if (local.player == NULL || local.player.dmteam != local.team)
-				{
-					end
-				}
-			}
-		} else if (!local.spectator && local.player.mef_spectator && !level.mef_disablespectating)
-		{
-			local.spectator = 1
-		}
-
-		if (local.trigger.spawned)
-		{
-			if (!local.player.mef_enteredgame)
-			{
-				local.player.mef_enteredgame = 1
-				waitthread player_entered_game local.player
-			}
-			
-			if (local.spectator)
-			{
-				waitthread unspawn_player local.player
-				if (local.player == NULL || local.player.dmteam != local.team)
-				{
-					end
-				}
-			} else
-			{
-				waitthread player_spawned local.player local.trigger
-			}
-		}
-		
-		local.trigger.spawned = 0
-		waitframe
-	}
-end
-
-
-player_spawned local.player local.trigger:
-	local.player.mef_pstate = "PSTATE_ALIVE"
-	local.player.mef_auxdata.spawnwatcher.active = 0
-	local.player.mef_auxdata.spawnwatcher nottriggerable
-end
-
-
-player_check_loop:
-	local.starttime = level.time
-	
-	while (1)
-	{
-		wait .2
-		waitthread check_players_joined_game
-		waitthread check_players_left_game
-		waitthread check_player_state
-		waitthread update_player_count
-		
-		waitthread check_round_state
-		
-		if (level.mef_nuketeam != NIL)
-		{
-			waitthread nuke_team level.mef_nuketeam
-			level.mef_nuketeam = NIL
-		}
-		
-		waitthread check_team_state level.mef_allies
-		waitthread check_team_state level.mef_axis
-		waitthread check_wave_killed
-		
-		if (!level.mef_gameover)
-		{
-			if (level.mef_checkwinthread != NIL)
-			{
-				local.winner = waitthread level.mef_checkwinthread
+				level.mef_nuketeam = waitthread global/libmef/util.scr::get_other_team local.winner
 			}
 		
-			if (local.winner != NIL)
+			if (!level.mef_devmode)
 			{
-				if (level.mef_autonuke)
-				{
-					level.mef_nuketeam = waitthread global/libmef/util.scr::get_other_team local.winner
-				}
-			
-				if (!level.mef_devmode)
-				{
-					waitthread global/libmef/util.scr::do_teamwin local.winner
-				} else if (level.time > (local.starttime + 10))
-				{
-					iprintln ("WINNER IS " + local.winner)
-					level.mef_gameover = 1
-				}
+				waitthread global/libmef/util.scr::do_teamwin local.winner
+			} else if (level.mef_elapsedtime > 10)
+			{
+				iprintln ("WINNER IS " + local.winner)
+				level.mef_gameover = 1
 			}
-		}
-
-		if (level.mef_allies.spawnfrozenbodies)
-		{
-			waitthread global/libmef/ft.scr::create_frozen_bodies "allies"
-		}
-
-		if (level.mef_axis.spawnfrozenbodies)
-		{
-			waitthread global/libmef/ft.scr::create_frozen_bodies "axis"
-		}
-	}
-end
-
-
-check_players_joined_game:
-	for (local.i = 1; local.i < ($player.size + 1); local.i++)
-	{
-		local.player = $player[local.i]
-		if (local.player != NIL && local.player != NULL && local.player.mef_auxdata == NIL)
-		{
-			waitthread init_player_auxdata local.player
-			local.player.mef_weaponclass = "rifle"
-			waitthread player_join_thread local.player
-		}
-	}
-end
-
-
-init_player_auxdata local.player:
-	local.player.mef_playerid = level.mef_nextplayerid
-	level.mef_nextplayerid++
-
-	local.ent = local createListener
-	local.ent.player = local.player
-
-	level.mef_players[level.mef_players.size] = local.ent
-
-	local.player.mef_auxdata = local.ent
-end
-
-
-check_players_left_game:
-	for (local.i = 0; local.i < level.mef_players.size; local.i++)
-	{
-		local.auxdata = level.mef_players[local.i]
-		if (local.auxdata.player == NULL)
-		{
-			waitthread remove_spawnwatcher local.auxdata
-			waitthread player_leave_thread local.auxdata
-			local.auxdata.delete = 1
-			local.removed = 1
 		}
 	}
 
-	if (local.removed)
+	if (level.mef_allies.spawnfrozenbodies)
 	{
-		local.newplayers[0] = NIL
-		for (local.i = 0; local.i < level.mef_players.size; local.i++)
-		{
-			local.auxdata = level.mef_players[local.i]
-			if (local.auxdata.delete)
-			{
-				local.auxdata remove
-			} else
-			{
-				local.newplayers[local.newplayers.size] = local.auxdata
-			}
-		}
-
-		level.mef_players = local.newplayers
+		waitthread global/libmef/ft.scr::create_frozen_bodies "allies"
 	}
-end
 
-
-check_player_state:
-	for (local.i = 0; local.i < level.mef_players.size; local.i++)
+	if (level.mef_axis.spawnfrozenbodies)
 	{
-		local.auxdata = level.mef_players[local.i]
-		local.player = local.auxdata.player
-
-		// check if the player left their team or joined the game
-		if (local.player.dmteam != local.player.mef_lastteam)
-		{
-			local.player.mef_pstate = "PSTATE_UNSPAWNED"
-			waitthread remove_spawnwatcher local.auxdata
-			waitthread player_team_thread local.player
-
-			// if player has joined a team, then check for spawn
-			if (local.player.dmteam == "allies" || local.player.dmteam == "axis")
-			{
-				waitthread new_spawnwatcher local.player
-				local.auxdata.spawnwatcher.active = 1
-				local.auxdata.spawnwatcher triggerable
-			}
-
-			local.player.mef_lastteam = local.player.dmteam
-		}
-		
-		if (local.player.mef_team != NIL)
-		{
-			// check if the player is dead
-			if (local.player.mef_pstate == "PSTATE_ALIVE" && !IsAlive(local.player))
-			{
-				waitthread player_dead_thread local.player
-				local.player.mef_pstate = "PSTATE_DEAD"
-				local.auxdata.spawnwatcher.active = 1
-				local.auxdata.spawnwatcher triggerable
-			}
-
-			waitthread player_revive_thread local.player
-		}
+		waitthread global/libmef/ft.scr::create_frozen_bodies "axis"
 	}
 end
 
@@ -768,60 +150,26 @@ get_team_respawn_time local.team:
 end local.team.nextrespawntime
 
 
-respawndelay_spectate_message local.player:
-	local.time = int (local.player.mef_respawntime - level.time)
-	local.str = "Next respawn in " + local.time + " "
-	if (local.time == 1)
+player_joined_server local.player:
+	if (level.mef_freezemode)
 	{
-		local.str += "second."
-	} else
-	{
-		local.str += "seconds."
-	}
-
-	if (local.time > 0)
-	{
-		local.player stopwatch local.time
-		local.player iprint local.str
+		waitthread global/libmef/ft.scr::player_joined_server local.player
 	}
 end
 
 
-spectate_message local.player:
-	if (local.player.mef_respawntime)
+player_left_server local.auxdata:
+	if (level.mef_freezemode)
 	{
-		waitthread respawndelay_spectate_message local.player
-	} else
-	{
-		local.str = "**SPECTATOR MODE**"
-		
-		if (!level.mef_settings["observe_builtin"])
-		{
-			local.str = local.str + " " + level.mef_observe_msgstring
-		}
-		
-		local.player iprint local.str
+		waitthread global/libmef/ft.scr::player_left_server local.auxdata
 	}
 end
 
 
-player_join_thread local.player:
-end
-
-
-player_team_thread local.player:
-	local.player physics_on
-	local.player.mef_spectator = 0
-	local.player.mef_enteredgame = 0
-	local.player.mef_team = NIL
-
-	waitthread global/libmef/ft.scr::remove_frozen_body local.player.mef_auxdata
-
+player_joined_team local.player:
 	// check if the player joined a team
 	if (local.player.dmteam == "allies" || local.player.dmteam == "axis")
 	{
-		local.player.mef_team = level.mef_team[local.player.dmteam]
-		
 		if (level.mef_roundstate == "WAITING" || local.player.mef_team.state == "OPEN")
 		{
 			local.player.mef_gstate = "GSTATE_ALIVE"
@@ -875,6 +223,14 @@ wait_for_spawn local.player local.delay:
 end
 
 
+player_left_team local.player:
+	if (level.mef_freezemode)
+	{
+		waitthread global/libmef/ft.scr::player_left_team local.player.mef_auxdata
+	}
+end
+
+
 player_entered_game local.player:
 	if (level.mef_freezemode) 
 	{
@@ -883,14 +239,21 @@ player_entered_game local.player:
 end
 
 
-player_dead_thread local.player:
-	if (!local.player.mef_team.respawn && level.mef_roundstate == "ACTIVE")
+player_spawned local.player:
+end
+
+
+player_died local.player:
+	if (!local.player.mef_team.respawn)
 	{
-		local.player.mef_gstate = "GSTATE_DEAD"
-		local.player.mef_spectator = 1
-		if (local.player.mef_team.freezemode)
+		if (level.mef_roundstate == "ACTIVE")
 		{
-			waitthread global/libmef/ft.scr::freeze_player local.player
+			local.player.mef_gstate = "GSTATE_DEAD"
+			local.player.mef_spectator = 1
+			if (local.player.mef_team.respawnmode == "ft")
+			{
+				waitthread global/libmef/ft.scr::freeze_player local.player
+			}
 		}
 	} else if (local.player.mef_team.respawndelay > 0)
 	{
@@ -900,14 +263,10 @@ player_dead_thread local.player:
 end
 
 
-player_revive_thread local.player:
+player_revived local.player:
 	if (!local.player.mef_team.respawn)
 	{
-		if (local.player.mef_gstate == "GSTATE_ALIVE" && local.player.mef_spectator)
-		{
-			local.player.mef_spectator = 0
-			local.player.mef_respawntime = NIL
-		} else if (local.player.mef_team.freezemode)
+		if (local.player.mef_team.respawnmode == "ft")
 		{
 			if (local.player.mef_gstate == "GSTATE_DEAD" && local.player.ft_meltplayer != NIL)
 			{
@@ -919,11 +278,6 @@ player_revive_thread local.player:
 		local.player.mef_spectator = 0
 		local.player.mef_respawntime = NIL
 	}
-end
-
-
-player_leave_thread local.auxdata:
-	waitthread global/libmef/ft.scr::remove_frozen_body local.auxdata
 end
 
 
@@ -975,201 +329,6 @@ get_winner_rb:
 		{
 			local.winner = "axis"
 		}
-	}
-end local.winner
-
-
-get_winner_obj:
-	local.rbwinner = waitthread get_winner_rb
-
-	if (local.rbwinner == NIL && level.mef_timeexpired)
-	{
-		local.rbwinner = waitthread global/libmef/util.scr::parse_clockside level.clockside
-	}
-
-	local.targets_notset = level.targets_to_destroy - level.targets_destroyed - level.bombs_planted + 1
-
-	if (local.rbwinner == "draw")
-	{
-		if (local.targets_notset <= 0)
-		{
-			local.winner = level.planting_team
-		} else
-		{
-			local.winner = "draw"
-		}
-	} else if (local.rbwinner == "allies")
-	{
-		if (level.planting_team == "axis" && local.targets_notset <= 0)
-		{
-			local.announcebomb = 1
-		} else
-		{
-			local.winner = "allies"
-		}
-	} else if (local.rbwinner == "axis")
-	{
-		if (level.planting_team == "allies" && local.targets_notset <= 0)
-		{
-			local.announcebomb = 1
-		} else
-		{
-			local.winner = "axis"
-		}
-	}
-
-	if (local.announcebomb && !level.mef_announcedbomb && !level.mef_timeexpired)
-	{
-		iprintlnbold_noloc "A bomb is still set!"
-		level.mef_announcedbomb = 1
-	}
-end local.winner
-
-
-get_winner_tow:
-	local.rbwinner = waitthread get_winner_rb
-
-	if (local.rbwinner == NIL && level.mef_timeexpired)
-	{
-		local.rbwinner = waitthread global/libmef/util.scr::parse_clockside level.clockside
-	}
-end local.rbwinner
-
-
-get_winner_score:
-	if (!level.mef_suddendeath)
-	{
-		end
-	}
-
-	local.rbwinner = waitthread get_winner_rb
-	
-	if (local.rbwinner == NIL && level.mef_timeexpired)
-	{
-		local.rbwinner = "draw"
-	}
-
-	if (local.rbwinner == "draw")
-	{
-		if (level.mef_scoring["allies"] && level.mef_scoring["axis"])
-		{
-			// both are scoring, wait till it completes
-			local.announcescoring = 1
-		} else if (level.mef_scoring["allies"])
-		{
-			local.winner = "allies"
-		} else if (level.mef_scoring["axis"])
-		{
-			local.winner = "axis"
-		} else
-		{
-			local.winner = "draw"
-		}
-	} else if (local.rbwinner == "allies")
-	{
-		if (level.mef_scoring["axis"])
-		{
-			local.announcescoring = 1
-		} else
-		{
-			local.winner = "allies"
-		}
-	} else if (local.rbwinner == "axis")
-	{
-		if (level.mef_scoring["allies"])
-		{
-			local.announcescoring = 1
-		} else
-		{
-			local.winner = "axis"
-		}
-	}
-
-	if (local.announcescoring && !level.mef_announcedscoring)
-	{
-		iprintlnbold_noloc "A score is in progress!"
-		level.mef_announcedscoring = 1
-	}
-end local.winner
-
-
-get_winner_doubleobj:
-	local.rbwinner = waitthread get_winner_rb
-
-	if (local.rbwinner == NIL && level.mef_timeexpired)
-	{
-		local.rbwinner = "draw"
-	}
-
-	if (level.mef_allies.dead || level.mef_axis.dead)
-	{
-		if (local.rbwinner == "draw")
-		{
-			if (level.dem_bombsblown == "none")
-			{
-				if (level.dem_bombs["allies"].live && level.dem_bombs["axis"].live)
-				{
-					if (level.dem_bombs["allies"].timeleft < level.dem_bombs["axis"].timeleft)
-					{
-						local.winner = "allies"
-					} else if (level.dem_bombs["axis"].timeleft < level.dem_bombs["allies"].timeleft)
-					{
-						local.winner = "axis"
-					} else
-					{
-						local.winner = "draw"
-					}
-				} else if (level.dem_bombs["allies"].live)
-				{
-					local.winner = "allies"
-				} else if (level.dem_bombs["axis"].live)
-				{
-					local.winner = "axis"
-				} else
-				{
-					local.winner = "draw"
-				}
-			} else if (level.dem_bombsblown == "both")
-			{
-				local.winner = "draw"
-			} else
-			{
-				local.winner = level.dem_bombsblown
-			}
-		} else if (local.rbwinner == "allies")
-		{
-			if (level.dem_bombsblown == "none" && level.dem_bombs["axis"].live && !level.dem_bombs["allies"].live)
-			{
-				local.announcebomb = 1
-			} else
-			{
-				local.winner = "allies"
-			}
-		} else if (local.rbwinner == "axis")
-		{
-			if (level.dem_bombsblown == "none" && level.dem_bombs["allies"].live && !level.dem_bombs["axis"].live)
-			{
-				local.announcebomb = 1
-			} else
-			{
-				local.winner = "axis"
-			}
-		}
-	} else if (local.rbwinner != NIL)
-	{
-		if (level.bombs_planted > 1)
-		{
-			local.announcebomb = 1
-		} else
-		{
-			local.winner = local.rbwinner
-		}
-	}
-
-	if (local.announcebomb && !level.mef_announcedbomb && !level.mef_timeexpired)
-	{
-		iprintlnbold_noloc "A bomb is still set!"
-		level.mef_announcedbomb = 1
 	}
 end local.winner
 
@@ -1237,13 +396,16 @@ end
 // team can be axis, allies, spectator, or all
 respawn_players local.team:
 	// reactivate the spawn blocks
-	if (local.team == "all")
+	if (!level.mef_lockspawns)
 	{
-		thread global/libmef/spawn.scr::block_region "allies" 8
-		thread global/libmef/spawn.scr::block_region "axis" 8
-	} else if (local.team == "allies" || local.team == "axis")
-	{
-		thread global/libmef/spawn.scr::block_region local.team 8
+		if (local.team == "all")
+		{
+			thread global/libmef/spawn.scr::block_region "allies" 8
+			thread global/libmef/spawn.scr::block_region "axis" 8
+		} else if (local.team == "allies" || local.team == "axis")
+		{
+			thread global/libmef/spawn.scr::block_region local.team 8
+		}
 	}
 
 	for (local.i = 0; local.i < level.mef_players.size; local.i++)
@@ -1264,6 +426,22 @@ end
 
 
 check_team_state local.team:
+	if (local.team.nextrespawnmode != NIL)
+	{
+		if (local.team.nextrespawnmode != local.team.respawnmode)
+		{
+			waitthread new_respawnmode local.team local.team.nextrespawnmode
+			local.team.respawnmode = local.team.nextrespawnmode
+		}
+		local.team.nextrespawnmode = NIL
+	}
+		
+	if (local.team.nextwaverespawn != NIL)
+	{
+		local.team.waverespawn = local.team.nextwaverespawn
+		local.team.nextwaverespawn = NIL
+	}
+
 	if (!level.mef_gameover)
 	{
 		if (local.team.respawntime != NIL && level.time >= local.team.respawntime)
@@ -1310,7 +488,7 @@ check_team_state local.team:
 				}
 
 				local.team.state = "DEAD"
-				if (local.team.freezemode)
+				if (local.team.respawnmode == "ft")
 				{
 					waitthread global/libmef/ft.scr::team_shatter local.team.name
 				}
@@ -1329,12 +507,74 @@ end
 open_team local.team:
 	local.team.state = "OPEN"
 
-	if (local.team.freezemode)
+	if (local.team.respawnmode == "ft")
 	{
 		local.team.spawnfrozenbodies = 1
 	}
 	
 	waitthread respawn_players local.team.name
+end
+
+
+init_respawnmode local.team local.respawnmode local.waverespawn:
+	if (local.respawnmode == "full")
+	{
+		local.team.respawn = 1
+	} else
+	{
+		local.team.respawn = 0
+	}
+	
+	local.team.respawnmode = local.respawnmode
+	local.team.waverespawn = local.waverespawn
+end
+
+
+new_respawnmode local.team local.nextrespawnmode:
+	if (local.nextrespawnmode == "none")
+	{
+		if (local.team.respawnmode == "full")
+		{
+			local.team.respawn = 0
+			waitthread respawn_dead_players local.team.name
+		} else
+		{
+			waitthread global/libmef/ft.scr::team_shatter local.team.name
+		}
+	} else if (local.nextrespawnmode == "ft")
+	{
+		if (local.team.respawnmode == "full")
+		{
+			local.team.respawn = 0
+			waitthread respawn_dead_players local.team.name
+		} else
+		{
+			// none -> ft, no case
+		}
+	} else if (local.nextrespawnmode == "full")
+	{
+		local.team.respawn = 1
+		local.team.respawnplayers = 1
+	}
+end
+
+
+respawn_dead_players local.team:
+	for (local.i = 0; local.i < level.mef_players.size; local.i++)
+	{
+		local.player = level.mef_players[local.i].player
+		
+		if (local.player.dmteam == local.team && local.player.mef_gstate == "GSTATE_ALIVE")
+		{
+			local.player.mef_spectator = 0
+			local.player.mef_respawntime = NIL
+			
+			if (local.player.mef_pstate == "PSTATE_DEAD")
+			{
+				local.player.mef_forcerespawn = 1
+			}
+		}
+	}
 end
 
 
@@ -1367,7 +607,7 @@ check_round_state:
 				level.mef_allowjoin = 0
 				level.mef_roundclosetime = NIL
 			}
-
+			
 			if (level.mef_allies.totplayers == 0 || level.mef_axis.totplayers == 0)
 			{
 				level.mef_roundstate = "WAITING"
@@ -1442,17 +682,6 @@ team_waverespawn_thread local.team local.secs:
 end
 
 
-round_timer:
-	level.mef_elapsedtime = 0.0
-	local.starttime = level.time
-	while (1)
-	{
-		level.mef_elapsedtime = level.time - local.starttime
-		wait 0.1
-	}
-end
-
-
 round_thread local.sdmins local.autonuke:
 	local.anukesecs = 20
 	local.sdsecs = local.sdmins * 60
@@ -1489,7 +718,7 @@ round_thread local.sdmins local.autonuke:
 		} else if (local.autonuke && !local.announcenuke && (level.mef_elapsedtime >= (local.endtime - local.anukesecs)))
 		{
 			local.announcenuke = 1
-			thread global/libmef/respawn.scr::teamnuke_thread local.anukesecs
+			thread teamnuke_thread local.anukesecs
 		}
 
 		wait 0.5
@@ -1498,18 +727,11 @@ end
 
 
 disable_respawn:
-	level.mef_dmrespawning = 0
-	level.mef_allies.respawn = 0
-	level.mef_allies.waverespawn = 0
-	level.mef_axis.respawn = 0
-	level.mef_axis.waverespawn = 0
-
-	if (level.mef_freezemode)
-	{
-		level.mef_freezemode = 0
-		level.mef_allies.freezemode = 0
-		level.mef_axis.freezemode = 0
-		waitthread global/libmef/ft.scr::team_shatter "allies"
-		waitthread global/libmef/ft.scr::team_shatter "axis"
-	}
+	level.mef_respawnmode = "none"
+	level.mef_allies.nextrespawnmode = "none"
+	level.mef_axis.nextrespawnmode = "none"
+	level.mef_allies.nextwaverespawn = 0
+	level.mef_axis.nextwaverespawn = 0
+	level.mef_allowjoin = 0
+	level.mef_roundclosetime = NIL
 end

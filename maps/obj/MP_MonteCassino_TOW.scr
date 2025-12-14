@@ -1,0 +1,929 @@
+// MP_MonteCassino_TOW
+// 
+// Map design: Victor "Vexar" Mercieca
+// Script: Jason Abbott
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//----------------------------------------------------------
+main:
+//----------------------------------------------------------
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Monte Cassino" 
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "MP_MonteCassino_TOW" 
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "tow":
+		case "fttow":
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_MonteCassino_TOW.scr"
+	level.music="MP_MonteCassino"
+
+	//Exec our helper scripts
+	exec global/ambient.scr
+	exec global/door_locked.scr::lock
+	exec global/exploder.scr
+	exec global/bomber.scr
+	
+	//Show throbing activator for allied entrance
+	$plugher show
+	$plugher triggerable
+
+	// Load the lighting for the level
+	//exec maps/obj/MP_MonteCassino_TOW/light_mp_montecassino_tow.scr
+	
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//remove all ai
+		$enemyspawner remove
+
+		//This will remove the bombs so that we can play in other modes...
+		$allied_bomb remove
+		$entrance_bomb remove
+
+	}
+	
+	//////////////////////////
+	level waittill prespawn
+	//////////////////////////
+	
+	// no network optimizations to reduce popping
+	setcvar	"g_netoptimize" "0"
+
+	//////////////////////////
+	level waittill spawn
+	//////////////////////////
+
+	$world farplaneclipcolor " 0.56 0.42 0.40" 		
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-540.9 -2544.87 24.13 90 SE Sector" "1562.18 1616.81 160.13 180 NW Room"
+	waitthread global/libmef/bases.scr::addbasepair "1079.68 -1846.97 416.13 90 NE Control Room" "-1568.34 1251.13 -95.88 -135 SW Generator Room"
+end
+
+
+towthread:
+	//Exec our helper scripts
+	exec global/tow_dm.scr
+	exec global/dm_ai.scr
+
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Protect the Camp" )
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "Raise Antenna" )
+	setcvar "g_obj_alliedtext3" ( loc_convert_string "Engage Radio Power" )
+	setcvar "g_obj_alliedtext4" ( loc_convert_string "Call in Air Strike" )
+	setcvar "g_obj_alliedtext5" ( loc_convert_string "Detonate German Entrance" )
+
+	setcvar "g_obj_axistext1" ( loc_convert_string "Protect Entrance" )
+	setcvar "g_obj_axistext2" ( loc_convert_string "Lower Antenna" )
+	setcvar "g_obj_axistext3" ( loc_convert_string "Disengage Radio Power" )
+	setcvar "g_obj_axistext4" ( loc_convert_string "Destroy Allied Camp" )
+	setcvar "g_obj_axistext5" ( loc_convert_string "Prevent Air Strike" )
+
+	level waittill prespawn
+
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_allied_spawner 1 4 1
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_axis_spawner 5 1 5
+
+	level waittill spawn
+
+//	$AxisDudes ai_off
+	$enemyspawner ai_off
+
+	//Globals
+	level.bPowerSwitchDown		= 0
+	level.bRoundStarted			= 0
+
+	// set the parameters for this round based match
+	level.dmroundlimit			= 15		// round time limit in minutes
+	level.clockside				= axis		// set to axis, allies, kills, or draw
+	level.numObjectives			= 5		// Number of objectives needed to win
+	level.bDoingAirstrike		= 0
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	//init objectives
+	thread init_objectives
+
+	//init objectives
+	thread init_switch_possitions
+
+	//init the switch handles
+	thread init_objective_switch_handles
+
+	//Init the spawner bombs
+	thread init_spawner_bombs
+
+	//Init the sub clamps
+	$t2355 waitthread maps/obj/MP_MonteCassino_TOW/antenna.scr::init_antenna
+	$t2355 thread maps/obj/MP_MonteCassino_TOW/antenna.scr::engage_antenna
+
+	level.bRoundStarted = 1
+end
+
+
+init_switch_possitions:
+	$power_handle_origin time 1
+	$power_handle_origin rotatezupto 85
+	$power_handle_origin waitmove
+	$power_handle_origin playsound switchbox 
+
+	// Radio is controlled by the axis
+	//$power_handle_origin rotatezdownto 85
+	//$power_handle_origin waitmove
+	//$power_handle_origin playsound switchbox 
+end
+
+//----------------------------------------------------------
+//Initialize the objective entities
+//----------------------------------------------------------
+init_objectives:
+
+	$obj_axis_spawner AxisObjNum 1
+	$obj_antenna AxisObjNum 2
+	$obj_power AxisObjNum 3
+	$obj_allied_spawner AxisObjNum 4
+	$obj_airstrike AxisObjNum 5
+
+	$obj_allied_spawner AlliesObjNum 1
+	$obj_antenna AlliesObjNum 2
+	$obj_power AlliesObjNum 3
+	$obj_airstrike AlliesObjNum 4
+	$obj_axis_spawner AlliesObjNum 5
+
+	$obj_antenna ControlledBy 1
+	$obj_power ControlledBy 0
+	$obj_airstrike ControlledBy 0
+	$obj_allied_spawner ControlledBy 1
+	$obj_axis_spawner ControlledBy 0
+
+	$obj_antenna initialize
+	$obj_power initialize
+	$obj_airstrike initialize
+	$obj_allied_spawner initialize
+	$obj_axis_spawner initialize
+
+	$obj_power SetCurrent 1
+	$obj_antenna SetCurrent 0
+
+	end
+
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:
+	
+	//First lets do the allies
+	if( $obj_antenna.ControlledBy == 0 )
+	{
+		iprintln ( loc_convert_string "Allies -- Raise the Antenna!" )
+		$obj_antenna SetCurrent 1
+	}
+	else if( $obj_power.ControlledBy == 0 )
+	{	
+		iprintln ( loc_convert_string "Allies -- Power the Radio!" )
+		$obj_power SetCurrent 1
+	}	
+	else if( $obj_airstrike.ControlledBy == 0 )
+	{	
+		iprintln ( loc_convert_string "Allies -- Call in the Airstrike!" )
+		$obj_airstrike SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $obj_antenna.ControlledBy == 1 )
+	{	
+		iprintln ( loc_convert_string "Axis -- Lower the Antenna!" )
+		$obj_antenna SetCurrent 0
+	}
+	else if( $obj_power.ControlledBy == 1 )
+	{	
+		iprintln ( loc_convert_string "Axis -- Turn off the Radio!" )
+		$obj_power SetCurrent 0
+	}
+	else
+	{
+		iprintln ( loc_convert_string "Axis -- Blow up the Allied tunnel" )
+		$obj_allied_spawner SetCurrent 0
+	}
+
+end
+
+//--------------------------------------------------------------
+//Init the objective switch handles
+//--------------------------------------------------------------
+init_objective_switch_handles:
+	
+	$antenna_handle bind $antenna_handle_origin
+	$power_handle bind $power_handle_origin
+	
+	$antenna_handle_origin notsolid
+	$power_handle_origin notsolid
+
+	$antenna_handle notsolid
+	$power_handle notsolid
+end
+
+//-----------------------------------------------
+// Init the spawner bombs
+//-----------------------------------------------
+init_spawner_bombs:
+	
+	//Allied spawner bomb
+	$allied_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_MonteCassino_TOW.scr::destroy_allied_spawner
+	
+	//Axis spawner bomb
+	$entrance_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_MonteCassino_TOW.scr::destroy_axis_spawner
+
+end
+
+//--------------------------------------------------------------
+//Activate Antenna
+//--------------------------------------------------------------
+toggle_sub_clamps local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if ( !level.bRoundStarted )
+		end
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		if( $obj_antenna.ControlledBy != 0 )
+		{
+			//Take the objective
+			$obj_antenna TakeOver 0
+			waitthread global/libmef/tow.scr::objective_captured axis
+			iprintln ( loc_convert_string "The Axis have lowered the Antenna!" )
+
+			//Update team current objectives
+			thread set_objectives
+			thread Check_End_Match
+
+			//engage the clamps
+			waitthread maps/obj/MP_MonteCassino_TOW/antenna.scr::lower_antenna
+
+			waitthread Check_End_Match
+		}
+	}
+	else if( local.switcher.dmteam == "allies" )
+	{
+		if( $obj_antenna.ControlledBy != 1 )
+		{
+			//Take the objective
+			$obj_antenna TakeOver 1
+			waitthread global/libmef/tow.scr::objective_captured allies
+			iprintln ( loc_convert_string "The Allies have raised the Antenna!" )
+
+			//Update team current objectives
+			thread set_objectives
+			thread Check_End_Match
+
+			//disengage the clamps
+			waitthread maps/obj/MP_MonteCassino_TOW/antenna.scr::engage_antenna
+
+			waitthread Check_End_Match
+		}
+	}
+
+end
+
+//--------------------------------------------------------------
+//Power handle
+//--------------------------------------------------------------
+toggle_radio_power local.triggerer:
+	if (local.triggerer.mef_spectator)
+	{
+		end
+	}
+
+	if( !level.bRoundStarted )
+		end
+
+	if( level.bRoundStarted == 1)
+	{
+		if( local.triggerer.dmteam == "axis" )
+		{
+			if( $obj_power.ControlledBy != 0 )
+			{
+				$obj_power TakeOver 0
+				waitthread global/libmef/tow.scr::objective_captured axis
+
+				$power_handle_origin time 1
+				//$power_handle_origin speed 0.05
+				$power_handle_origin rotatezupto 85
+				$power_handle_origin waitmove
+				$power_handle_origin playsound switchbox 
+
+				iprintln ( loc_convert_string "The Axis has shut down the radio!" )
+
+				thread set_objectives
+				waitthread Check_End_Match
+			}
+		}
+		else
+		{
+			if( $obj_power.ControlledBy != 1 )
+			{
+				$obj_power TakeOver 1
+				waitthread global/libmef/tow.scr::objective_captured allies
+
+				$power_handle_origin time 1
+				//$power_handle_origin speed 0.05
+				$power_handle_origin rotatezdownto 5
+				$power_handle_origin waitmove
+				$power_handle_origin playsound switchbox 
+
+				iprintln ( loc_convert_string "The Allies have powered up the radio!" )
+
+				thread set_objectives
+				waitthread Check_End_Match
+			}
+		}	
+	}
+end
+
+/*  jsl-->Test code for bug #6287
+test:
+
+if ( level.junk==NIL )
+{
+	level.junk = local
+	//disengage the clamps
+	$t2355 waitthread maps/obj/MP_MonteCassino_TOW/antenna.scr::engage_antenna
+	dprintln "antenna is now engaged!"
+	wait 5
+	$obj_power TakeOver 1
+	println "Took over power!"
+	thread set_objectives
+
+
+}
+end
+*/
+
+//--------------------------------------------------------------
+//Radio/Air Strike Start switch
+//--------------------------------------------------------------
+airstrike_switch local.triggerer:
+	if (local.triggerer.mef_spectator)
+	{
+		end
+	}
+
+	if( !level.bRoundStarted )
+		end
+	
+	if( local.triggerer.dmteam != "allies" ) {
+		local.triggerer iprint ( loc_convert_string "What are you thinking? This calls in the Allied airstrike!" )
+		end
+	}
+
+	if ( $obj_power.ControlledBy != 1 ) {
+		local.triggerer iprint ( loc_convert_string "You don't control the radio!" )
+//		thread test
+		end
+	}
+
+	if ( $obj_antenna.ControlledBy != 1) {
+		local.triggerer iprint ( loc_convert_string "You don't control the antenna!" )
+		end
+	}
+
+	if ( $t2355.pos != 1 ) {
+		local.triggerer iprint ( loc_convert_string "Antenna hasn't been fully raised!" )
+		end
+	}
+
+	if (level.bDoingAirstrike==1)
+	{
+//		println "Doing airstrike. Ignoring duplicate request..."
+		end
+	}
+
+	level.bDoingAirstrike = 1
+	
+	$airstrike_handle_origin time 1
+	//$airstrike_handle_origin speed 1.0
+	$airstrike_handle_origin rotatezdownto 5
+	$airstrike_handle_origin waitmove
+	$airstrike_handle_origin playsound switchbox
+
+	$obj_airstrike TakeOver 1
+
+	iprintln ( loc_convert_string "The Allies have called in an airstrike!" )
+
+	waitthread set_objectives
+	waitthread AlliesWon
+
+	level.bDoingAirstrike = 0
+
+end
+
+//-----------------------------------------------
+// See if someone won
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAxis	= 0
+
+	//Allied Spawner
+	if( $obj_allied_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+
+	//Axis Spawner
+	if( $obj_axis_spawner.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+	
+	//Antenna
+	if( $obj_antenna.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+	
+	//Power
+	if( $obj_power.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}	
+
+	//Airstrike
+	if( $obj_airstrike.ControlledBy == 0 )
+	{
+		local.nAxis++
+	}
+	
+	//Allies win by calling in an airstrike, we only need to see if the axis have taken all the objectives...
+	if( local.nAxis == level.numObjectives )
+	{
+		//If the clock expires during the movie ignore it
+		level ignoreclock 1
+		level.mef_gameover = 1
+
+		//if there is a bomb ticking stop it.
+		waitthread global/libmef/bomb.scr::StopBomb
+
+		//Play the cinematic
+		thread AxisWon
+	}
+
+end
+
+//----------------------------------------------------------
+//Destroy the allied spawner here
+//----------------------------------------------------------
+destroy_allied_spawner:
+
+	//Make sure we are the allies	
+	iprintln ( loc_convert_string "The Allied Camp has been destroyed!" )
+
+	//Take over the objective
+	$obj_allied_spawner TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+	
+	iprintln ( loc_convert_string "The Allied Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Destroy the axis spawner here
+//----------------------------------------------------------
+destroy_axis_spawner:
+
+	// The bomb is stuck with it's origin inside the wall, meaning
+	// it doesn't actually destroy anything. Feh. So instead we
+	// explode a second time in the space just outside where the
+	// bomb should be.
+	local.hackExplosionOrigin = ( -542 2177 320 )
+	radiusdamage local.hackExplosionOrigin 200 1054
+
+
+	iprintln ( loc_convert_string "The Axis Entrance has been destroyed!" )
+
+	$obj_axis_spawner TakeOver 1	
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	iprintln ( loc_convert_string "The Axis Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+
+//-----------------------------------------------
+//Secondary Allied Entrance
+//-----------------------------------------------
+open_second_entrance local.who:
+	if (local.who.mef_spectator)
+	{
+		end
+	}
+
+	$plugher  nottriggerable
+	$plugher  anim "fire"
+	local.who playsound plunger
+	
+	wait 0.45
+
+	thread global/exploder.scr::explode 11669
+	local.epicenter = $center_statue.origin
+	$center_statue remove
+	radiusdamage local.epicenter 500 1054
+	local.epicenter = $center_statue.origin + ( 0 0 100 )
+	radiusdamage local.epicenter 500 1054
+	waitexec global/earthquake.scr 1 1 0 0
+	
+	//$plugher hide
+end
+
+
+//----------------------------------------------------------
+//Allies Won do their cinematic
+//----------------------------------------------------------
+AlliesWon:
+
+	fadeout 1.0 0 0 0 1
+
+	wait 1
+			
+	$player nodamage
+	$player hide
+	freezeplayer
+
+	//ignore the clock for the movies
+	level ignoreclock 1
+	level.mef_gameover = 1
+
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+
+	thread global/dm_ai.scr::spawnset 555 AxisDudes
+
+	level.fireAtBombers = 1
+	//$ai_target flypath $ai_target_path 1500 900 256	//2250 2000 500
+	$AxisDudes thread DoAxisFireGuys
+	
+	waitthread airstrike_start
+
+	forcemusic aux3 aux3
+
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	wait 5
+
+	end
+
+
+//-----------------------------------------------
+//Axis have won do their cinematic
+//-----------------------------------------------
+AxisWon:
+
+	fadeout 1.0 0 0 0 1
+
+	wait 1
+	
+	//Standard hide player stuff
+	$player nodamage
+	$player hide
+	freezeplayer
+	level ignoreclock 1
+	level.mef_gameover = 1
+
+	forcemusic aux4 aux4
+
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+	level.fireAtBombers = 1
+	
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+	
+	thread global/dm_ai.scr::spawnset 555 AxisDudes
+	$AxisDudes thread DoAxisFireGuys
+
+	waitthread airstrike_fails
+
+	//waitthread maps/obj/MP_MonteCassino_TOW/antenna.scr::goosestep_start
+
+	forcemusic aux5 aux5
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+	wait 5
+end
+
+// -------------------------------------------------------------------------------------
+DoAxisFireGuys:
+// -------------------------------------------------------------------------------------
+
+	//self gun "StG 44"
+	//self gun "panzerschreck"
+	self gun "mauser kar 98k"
+	//self gun "MP40"
+	self exec global/disable_ai.scr	
+
+	wait 4
+
+	self thread FireShots
+
+	end
+
+// -------------------------------------------------------------------------------------
+FireShots:
+// -------------------------------------------------------------------------------------
+	
+	if( !isAlive self)
+		end
+
+	//local.target = $camera_1
+	local.target = $bomberplane2
+	self.target = local.target
+
+	local.i = 1
+
+	while (level.fireAtBombers == 1)
+	{		
+		if( !isAlive self )
+			end
+		
+		self aimat local.target
+		self turnto local.target
+
+		local.rand = randomfloat .35
+		local.rand += 0.2			 
+	
+		wait local.rand		
+		
+		self fire
+
+		local.i++
+	}
+
+	self anim generic_stand_bored_b
+
+	local.rand = randomfloat .35
+	local.rand += 0.2			 
+	
+	wait local.rand
+
+	if (randomint(5) > 1)
+		self anim 00A001_victory
+	else
+		self anim handler_discipline
+
+end
+
+doFadeIn:
+	fadein 1.0 0 0 0 1
+end
+
+//--------------------------------------------------------------
+//Placeholder cinematics for the bomb-run (Allied victory)
+//--------------------------------------------------------------
+airstrike_start:
+
+	//setup our camera		
+	$camera_1 fov 60 2
+	$camera_1 speed .2
+	$camera_1 follow $camera_path1 $obj_airstrike
+	$camera_1 cut
+
+	forcemusic aux2 aux2
+
+	thread global/bomber.scr::bomb 1
+	$bomber[1] thread addSpeaker e2l3_c47_flyby
+
+	thread global/bomber.scr::bomb 2
+	$bomber[2] thread addSpeaker e2l3_c47_flyby
+	
+	thread global/bomber.scr::bomb 3
+	$bomber[3] thread addSpeaker e2l3_c47_flyby
+
+	//Cue the movie baby!
+	cuecamera $camera_1
+
+	wait 1.5
+
+	thread doFadeIn
+
+	wait 2.5
+
+	$camera_2 fov 110 2
+	$camera_2 speed .6
+	$camera_2 follow $camera_path2
+	$camera_2 cut
+	cuecamera $camera_2
+
+	$bomber[1] thread speakerPlay e2l3_c47_flyby
+	$bomber[2] thread speakerPlay e2l3_c47_flyby
+	$bomber[3] thread speakerPlay e2l3_c47_flyby
+
+	wait 2.5
+
+	//Blow up the statue
+	thread global/exploder.scr::explode 11669
+	if( $center_statue != NIL && $center_statue != NULL )
+		$center_statue remove
+
+	wait 1.5
+
+	$camera_3 fov 110 2
+	$camera_3 speed .6	
+	$camera_3 follow $camera_path3
+	$camera_3 cut
+	cuecamera $camera_3
+
+	$bomber[1] thread speakerPlay e2l3_c47_flyby
+	$bomber[2] thread speakerPlay e2l3_c47_flyby
+	$bomber[3] thread speakerPlay e2l3_c47_flyby
+
+	wait 2.5
+
+	$air_bomb_explode thread bomb_explode
+
+
+end
+
+//--------------------------------------------------------------
+//Placeholder cinematics for the bomb-run (Allied victory)
+//--------------------------------------------------------------
+airstrike_fails:
+
+	//setup our camera		
+	$camera_1 fov 60 2
+	$camera_1 speed .2
+	$camera_1 follow $camera_path1 $obj_airstrike
+	$camera_1 cut
+
+	forcemusic aux2 aux2
+
+	thread global/bomber.scr::bomb 2
+	$bomber[2] thread addSpeaker plane2
+
+	//Cue the movie baby!
+	cuecamera $camera_1
+
+	wait 1.5
+
+	thread doFadeIn
+
+	wait 2.5
+
+	$camera_2 fov 110 2
+	$camera_2 speed .6
+	$camera_2 follow $camera_path2
+	$camera_2 watch $bomberplane2
+	$camera_2 cut
+	cuecamera $camera_2
+	$camera_2 showquakes
+
+	$bomberplane2.loop = -1
+
+	$bomber[2] thread speakerPlay plane2
+
+	wait 0.8
+
+	local.boomplane = spawn "vehicles/It_V_Veltro_e2l2_cinematic1.tik" "origin" ( $bomberplane2.origin + ( 0 0 -190 ) )
+	local.boomplane bind $bomberplane2
+	local.boomplane.angles = $bomberplane2.angles
+	local.boomplane anim explode
+	local.boomplane hide
+
+	exec global/earthquake.scr 1 1 0 0
+
+	wait 1.0
+
+	level.fireAtBombers = 0
+
+	wait 1.5
+
+end
+
+//-----------------------------------------------
+// Attach a speaker to an object (self) and play a sound
+//-----------------------------------------------
+addSpeaker local.sound:
+	self.soundmaker = spawn "animate/military_radio.tik" "origin" self.origin "scale" "0.01" 
+	self.soundmaker rendereffects "+dontdraw"
+	self.soundmaker bind self
+	self thread speakerPlay local.sound
+end
+
+//-----------------------------------------------
+// Attach a speaker to an object (self) and play a sound
+//-----------------------------------------------
+speakerPlay local.sound:
+	self.soundmaker playsound local.sound
+end
+
+//-----------------------------------------------
+//Do some fx
+//-----------------------------------------------
+spawn_fx local.fx:
+
+	local.temp = spawn script_model model local.fx
+	local.temp.origin = self.origin
+	local.temp anim start
+	wait 5
+	local.temp remove
+
+end
+
+
+//-----------------------------------------------
+bomb_explode:
+//-----------------------------------------------
+
+	thread jitter_large 0
+	
+	if (self.exploder_set != NIL)
+	{
+		exec global/exploder.scr::explode self.exploder_set
+	}
+	
+	if (self.explosion_fx != NIL)
+	{
+		self thread spawn_fx self.explosion_fx
+	}
+	
+	if (self.explosion_sound != NIL)
+	{
+		self playsound self.explosion_sound
+	}
+
+	end
+
+
+//-----------------------------------------------
+// jitter large effect
+// jitter_large [delay]
+//-----------------------------------------------
+jitter_large local.time:
+	
+	if (local.time)
+		wait local.time
+
+	waitexec global/earthquake.scr .35 10 0 0
+	waitexec global/earthquake.scr .23 6 0 0
+	waitexec global/earthquake.scr 1 1 0 0
+	waitexec global/earthquake.scr 1.25 .3 0 1
+
+end

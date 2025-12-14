@@ -1,10 +1,10 @@
 /*
 ================================================================================
 Map Description Library
-for Medal Of Honor: Allied Assault
-Version 1.1 (06/02/04)
+for Medal Of Honor
+Version 1.1.1 (03/01/05)
 
-Copyright (c) 2003-2004 Mark Follett
+Copyright (c) 2003-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -260,7 +260,7 @@ setup_bsp_mohdm3:
 	level.map_sectors[10] = "Gallery Dining"::"GD"
 	level.map_sectors[11] = "Gallery Balcony"::"GB"
 	level.map_sectors[12] = "Clock Tower"::"CT"
-	level.map_sectors[13] = "South Gate"::"GS"
+	level.map_sectors[13] = "South Gate"::"SG"
 	level.map_sectors[14] = "South Sector"::"OS"
 	level.map_sectors[15] = "Pub Front"::"PF"
 	level.map_sectors[16] = "Covered Walkway"::"CW"

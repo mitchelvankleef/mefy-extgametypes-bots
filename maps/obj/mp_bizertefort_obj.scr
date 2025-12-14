@@ -1,0 +1,232 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//-------------------------------------
+main:
+//-------------------------------------
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Bizerte Festung" )
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+	
+	setcvar "g_scoreboardpic" "mp_bizerte_dm"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "obj":
+		case "ftobj":
+			thread ObjectiveMode
+			break
+	}
+
+	level.script = maps/obj/mp_bizertefort_obj.scr
+
+	////////////////////	
+	level waittill prespawn
+	////////////////////
+
+	exec global/DMprecache.scr
+	exec global/door_locked.scr
+
+	$crustywerfer nodamage
+	$crustywerfer_turret0 nodamage
+
+	if($collisionhull)
+	{
+		$collisionhull.angles = (0 0 0)
+		$collisionhull.origin = $collisionhull.origin + (0 0 -300)
+		$crustywerfer.collisionent =  $collisionhull
+	}
+//	$crustywerfer notsolid
+//	$crustywerfer_turret0 notsolid
+		
+End
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "1791.13 -3008.87 128.13 90 Destroyed Bridge" "1135.13 1762.95 128.13 0 NW Corridor"
+	waitthread global/libmef/bases.scr::addbasepair "-1072.87 -747.07 288.13 0 SW Sector" "3394.58 557.81 128.13 180 NE Sector"
+end
+
+
+// Created Objective Mode
+ObjectiveMode:
+		// axistext
+		setcvar "g_obj_axistext1" ( loc_convert_string "Protect the" )
+		setcvar "g_obj_axistext2" ( loc_convert_string "Fort Supplies" )
+		setcvar "g_obj_axistext3" ""
+			
+		// allies
+		setcvar "g_obj_alliedtext1" ( loc_convert_string "Destroy the" ) 
+		setcvar "g_obj_alliedtext2" ( loc_convert_string "Fort Supplies" )
+		setcvar "g_obj_alliedtext3" ""
+		
+		level waittill prespawn
+
+		waitthread reverseSpawnPoints
+		
+		level waittill spawn
+
+		local.bomborigin = ( -1346 -907 353)
+		level.defusing_team = "axis" // allies
+		level.planting_team = "allies"  // axis
+		level.bombs_to_plant = 1
+		level.bomb_damage = 600
+		level.bomb_explosion_radius = 1024
+		level.targets_to_destroy = 1
+		level.bomb_defuse_time = 60 //tenths of a second
+		level.bomb_set_time = 50  //tenths of a second
+		level.bomb_explosion_radius = 1054  //quake units
+		level.bomb_use_distance = 128 //quake units
+		level.bomb_damage = 200
+		level.bombusefov = 30
+
+		level.subtitleX = 100
+		level.subtitleY = 50
+		// set the parameters for this round/wave based match
+		level.clockside = axis // set to axis, allies, kills, or draw
+		level.dmroundlimit = 5   // round time limit in minutes
+		
+		if (level.mef_gametype != "ftobj")
+		{
+			level.dmrespawning = 0 // 1 or 0
+		}
+
+		spawn script_model "targetname" "bomb1" "model" "items/pulse_explosive.tik" "origin" local.bomborigin
+		local.crate = spawn script_model "targetname" "fakecrate" "origin" ( -1346 -907 305)
+		
+		wait 1.0
+		$bomb1.trigger_name = spawn trigger_use "origin" $bomb1.origin targetname "Bomb1Trigger"
+		$bomb1.explosion_fx = "fx/fx_flak88_explosion.tik"
+		$bomb1.explosion_sound = "explode_aagun"
+		waitframe
+		$bomb1.angle = -90
+		$bomb1.trigger_name setsize ( -40 -40 -40) (40 40 40)
+		if($fortcrates)
+			thread bomb_exploded $bomb1 $fortcrates
+			
+		waitthread global/libmef/util.scr::waittill_roundstart
+		
+		$bomb1 thread global/libmef/bomb.scr::bomb_thinker
+
+		$bomb1.bomb_defuse_time = 20 //tenths of a second
+		$bomb1.bomb_set_time = 50  //tenths of a second, 50
+		$bomb1.bomb_tick_time = 15  //seconds, 15
+		$bomb1.bomb_explosion_radius = 500  //quake units
+		$bomb1.bomb_use_distance = 128 //quake units
+		$bomb1.bomb_damage = 200000
+		$bomb1.bombusefov = 30
+ 
+	  	thread allied_win_bomb
+
+		addobjective 1 1 "" $bomb1.origin
+		setcurrentobjective 1
+End
+
+//*** --------------------------------------------
+//*** Special effects macro
+//*** --------------------------------------------
+
+spawn_fx local.fx:
+	local.temp = spawn script_model model local.fx
+	local.temp notsolid
+	local.temp.origin = self.origin
+	local.temp anim start
+	local.temp playsound explode_truck1
+	local.temp notsolid
+	earthquake .5 2 1 0
+	wait 5
+	local.temp remove
+end
+
+
+//*** --------------------------------------------
+//*** Explode all the crates near the bomb
+//*** --------------------------------------------
+
+explodeCrate:
+	local.wait = 0.1 + randomfloat(0.6)
+	wait local.wait
+	self thread spawn_fx models/fx/fx_tank_explosion.tik
+	wait 0.5
+	self thread spawn_fx models/emitters/tehao_explosionDust.tik
+end
+
+
+//*** --------------------------------------------
+//*** Wait for a bomb to go off
+//*** --------------------------------------------
+
+bomb_exploded local.bomb local.crates:
+	while (!local.bomb.exploded)
+		wait .1
+
+	local.crates waitthread explodeCrate
+end
+
+
+allied_win_bomb:
+	while(level.targets_destroyed < level.targets_to_destroy)
+		waitframe
+	
+	waitthread global/libmef/util.scr::do_teamwin allies
+end
+
+
+reverseSpawnPoints:
+	if(!($axisspawn) || !($alliedspawn))
+		End
+	local.axis = $axisspawn.size 
+	local.allies = $alliedspawn.size
+	if(local.axis > local.allies)
+		{
+			for(local.a = 1; local.a <= local.allies; local.a++)
+			{
+				local.temporigin = $axisspawn[local.a].origin
+				local.tempangles = $axisspawn[local.a].angles
+				$axisspawn[local.a].origin = $alliedspawn[local.a].origin
+				$axisspawn[local.a].angles = $alliedspawn[local.a].angles
+
+				$alliedspawn[local.a].origin = local.temporigin
+				$alliedspawn[local.a].angles = local.tempangles
+			}
+			for(local.b = local.allies + 1; local.b <= local.axis; local.b++)
+				$axisspawn[local.a] disablespawn
+		}
+	else
+		{
+			for(local.a = 1; local.a <= local.axis; local.a++)
+			{
+				local.temporigin = $axisspawn[local.a].origin
+				local.tempangles = $axisspawn[local.a].angles
+				$axisspawn[local.a].origin = $alliedspawn[local.a].origin
+				$axisspawn[local.a].angles = $alliedspawn[local.a].angles
+
+				$alliedspawn[local.a].origin = local.temporigin
+				$alliedspawn[local.a].angles = local.tempangles
+			}
+			for(local.b = local.axis + 1; local.b <= local.allies; local.b++)
+				$alliedspawn[local.a] disablespawn
+		}	
+	
+End
+

@@ -1,0 +1,397 @@
+//OBJ Castello	
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//-------------------------------------------------------------	
+main:
+//-------------------------------------------------------------
+
+	setcvar "g_obj_alliedtext1" ""
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" "Castello"
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "mp_castello_obj"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "obj":
+		case "ftobj":
+			thread objectivethread
+			break
+	}
+
+	if (level.mef_gametype != "obj" && level.mef_gametype != "ftobj")
+	{
+		//remove objective stuff here
+		$barntruck_explode remove
+		$sdkfz_explode remove
+
+		$radioblocker remove
+		$radioblockerdoor remove
+		$radio_door_locked remove
+		$radio_door_bomb remove
+		$documents_stolen remove
+
+		$barndoorblocker remove
+
+		$exploder remove		
+		$exploderchunk remove
+
+		$barngatetimer remove
+		$radio_door_bomb remove
+	}
+
+	$world farplane 6000
+	$world farplane_color (.30 .30 .30)
+	
+	level.script = maps/obj/mp_castello_obj.scr
+	level.music = "MP_Castello"
+	//snow
+	level.rain_speed		= "32"		//was32
+	level.rain_speed_vary	= "16"
+	level.rain_length		= "2"
+	level.rain_width		= "1"
+	level.rain_density		= ".8"
+	level.rain_slant		= "-10"		//was 250
+	level.rain_max_dist		= "2048"	//was 1800
+	level.rain_min_dist		= "512"
+	level.rain_numshaders	= 12		//was 12
+	level.rain_shader		= "textures/snow"
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+	
+	exec global/dmprecache.scr 
+	level.script = maps/obj/mp_castello_obj.scr
+	exec global/ambient.scr mohdm4
+	exec global/door_locked.scr
+	exec global/exploder.scr
+	exec global/bomber.scr
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+	
+	$sdkfz notsolid
+	$sdkfz nodamage
+	$sdkfz setcollisionentity $sdkfzmask	
+	
+	$truck1 notsolid
+	$truck1 nodamage	
+	$truck1 setcollisionentity $truck1col
+	$truck1 anim stop_wheels
+	
+	//setup the fans
+	thread init_fans
+	
+	//planes go...
+	thread flyby
+
+	if (level.mef_gametype != "obj" && level.mef_gametype != "ftobj")
+	{
+		//we want the blown up gate, and door to be shown correctly
+		$explodersmashed show
+		$explodersmashed solid
+	}
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "1216.39 -413 2.04 180 NE Gate" "-1807.13 1687.26 150.13 180 SW Yard"
+	waitthread global/libmef/bases.scr::addbasepair "-513.02 -1088.87 2.22 90 Front Gate" "1400.6 2228.15 161.13 180 NW Hallway"
+end
+
+
+objectivethread:
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Destroy Opel Truck" )
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "Destroy Halftrack" )
+	setcvar "g_obj_alliedtext3" ( loc_convert_string "Transmit Documents" )
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ( loc_convert_string "Defend the Manor" )
+	setcvar "g_obj_axistext3" ""
+
+	level waittill prespawn
+	
+	//init the radio room door
+	$radio_door_locked thread global/door_locked.scr::door_locked_metal
+
+	level waittill spawn
+
+	level.defusing_team			= "axis"
+	level.planting_team			= "allies"
+	level.targets_to_destroy	= 3
+	level.bomb_damage			= 50
+	level.bomb_explosion_radius = 64
+	level.bomb_set_time = 50  //tenths of a second
+	level.bomb_use_distance = 128 //quake units
+	level.bombusefov = 30
+
+	level.dmroundlimit			= 5
+	level.clockside				= axis
+	if (level.mef_gametype != "ftobj")
+	{
+		level.dmrespawning = 0 // 1 or 0
+	}
+
+	//Setup the objective text names so the obj_dm.scr can remove them.
+	$barntruck_explode.objCvar = "g_obj_alliedtext1"
+	$sdkfz_explode.objCvar = "g_obj_alliedtext2"
+
+	//Setup the name of the bombs so obj_dm can report which bomb is planted
+	$barntruck_explode.desc = "Opel Truck"
+	$sdkfz_explode.desc = "Halftrack"
+	$sdkfz_explode.explosion_radius = 128
+
+	$barngatetimer hide
+	$radio_door_bomb hide
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	$barntruck_explode thread global/libmef/bomb.scr::bomb_thinker
+	$sdkfz_explode thread global/libmef/bomb.scr::bomb_thinker	
+	$documents_stolen thread documents_waittill_send
+
+	$barngatetimer show
+	$radio_door_bomb show
+		
+	thread allies_win_bomb	
+	thread axis_win_timer
+
+	addobjective 1 1 "" $radio_door_bomb.origin
+	setcurrentobjective 1
+	thread pickRandomObjective
+end	
+
+
+//-------------------------------------------------------------
+pickRandomObjective:
+//-------------------------------------------------------------
+	local.a = 1
+
+	if ($documents_stolen && $documents_stolen.noLongerAGoal != 1)
+	{
+		local.arrayOfPossibleGoals[local.a] = $documents_stolen.origin
+		local.potentialWatchedBombs[local.a] = 1
+		local.a++
+	}
+
+	if ($sdkfz_explode && $sdkfz_explode.exploded != 1)
+	{
+		local.arrayOfPossibleGoals[local.a] = $sdkfz_explode.origin
+		local.potentialWatchedBombs[local.a] = $sdkfz_explode
+		local.a++
+	}
+	if ($barntruck_explode && $barntruck_explode.exploded != 1)
+	{
+		local.arrayOfPossibleGoals[local.a] = $barntruck_explode.origin
+		local.potentialWatchedBombs[local.a] = $barntruck_explode
+		local.a++
+	}
+
+	local.a--
+
+	if (local.a == 0)
+		end
+
+	local.r = randomint(local.a) + 1
+	set_objective_pos local.arrayOfPossibleGoals[local.r]
+	if (local.potentialWatchedBombs[local.r] != 1)
+		thread watchBomb local.potentialWatchedBombs[local.r]
+	end
+
+//-------------------------------------------------------------
+watchBomb local.bomb:
+//-------------------------------------------------------------
+	while (local.bomb && local.bomb.exploded != 1)
+		wait 0.1
+
+	thread pickRandomObjective
+
+	end
+
+
+
+//-------------------------------------------------------------
+allies_win_bomb:
+//-------------------------------------------------------------
+	
+	while(level.targets_destroyed < level.targets_to_destroy)
+		waitframe
+
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	end
+
+//-------------------------------------------------------------
+axis_win_timer:
+//-------------------------------------------------------------
+
+	level waittill axiswin
+
+	end
+
+
+//-------------------------------------------------------------
+blowgate:
+//-------------------------------------------------------------
+	
+	thread global/exploder.scr::explode 7
+	$barndoorblocker remove
+	waitexec global/earthquake.scr 1 1 0 0	
+
+	end
+
+//-------------------------------------------------------------
+gatebombused:
+//-------------------------------------------------------------
+
+	iprintlnbold ( loc_convert_string "The Barn Gate Bomb has been planted!" )
+
+	end
+
+//-------------------------------------------------------------
+blowdoor:
+//-------------------------------------------------------------
+	
+	thread global/exploder.scr::explode 8
+	$radioblocker remove
+	$radioblockerdoor remove
+	waitexec global/earthquake.scr 1 1 0 0
+	$radio_door_locked remove
+
+	end
+
+//-------------------------------------------------------------
+doorbombused:
+//-------------------------------------------------------------
+	
+
+	iprintlnbold ( loc_convert_string "The Radio Room Door Bomb has been planted!" )
+	
+	end
+
+
+
+
+//------------------------------------------------------------
+flyby:
+//------------------------------------------------------------
+
+	//random flyby of planes
+    	wait 1.0
+	thread global/bomber.scr::bomb 4	
+	thread global/bomber.scr::bomb 10
+	wait (randomint(120) + 40)  //180 60
+	
+	goto flyby
+
+	end
+
+//-------------------------------------------------------------
+documents_waittill_send:
+//-------------------------------------------------------------
+
+	while ( $(self.trigger_name) )
+	{
+		dprintln "waittill trigger " self.trigger_name 
+		self.trigger_name waittill trigger	
+
+		local.player = parm.other
+		//"local.player.dmteam", can be 'spectator', 'freeforall', 'allies' or 'axis'
+		if (local.player.dmteam != level.planting_team) 
+		{
+			dprintln "failed dmteam check" local.player.dmteam
+			goto documents_waittill_send
+		}	
+		
+		local.counter = 0
+		while ( (Isalive local.player) && (local.player cansee self level.bombusefov level.bomb_use_distance) && (local.player.useheld == 1) && !local.player.mef_spectator)
+		{
+			if (local.counter == 0)
+			{
+				local.player stopwatch (level.bomb_set_time * .1)
+				local.player.mef_pressingbutton = 1
+			}
+				
+			local.counter++
+
+			wait .1
+			if (local.counter >= level.bomb_set_time)
+			{
+				iprintlnbold ( loc_convert_string "The Documents Have Been Sent." )
+				self playsound radio_on									
+				
+				level.targets_destroyed++
+				self.noLongerAGoal = 1	
+				thread pickRandomObjective
+				setcvar "g_obj_alliedtext3" ""
+				local.player.mef_pressingbutton = 0
+				end
+			}
+		}
+		
+		if (local.counter > 0)
+		{
+			local.player stopwatch 0
+			local.player.mef_pressingbutton = 0
+		}
+		
+		dprintln "usetrigger but failed check" 		
+		if !(self cansee local.player level.bombusefov  level.bomb_use_distance) 
+		{
+			dprintln "failed cansee check"	
+		}
+		
+		if !(local.player.useheld == 1)
+		{
+			dprintln "failed useheld check" local.player.useheld
+		}
+	}
+
+	
+	end
+
+
+//-------------------------------------------------------------
+init_fans:
+//-------------------------------------------------------------
+
+	$fanblade1 bind $fanbase1
+	$fanblade2 bind $fanbase1
+	$fanblade3 bind $fanbase1
+	$fanblade4 bind $fanbase1
+	$fanbase1 rotatey 250
+
+	$fanblade1a bind $fanbase2
+	$fanblade2a bind $fanbase2
+	$fanblade3a bind $fanbase2
+	$fanblade4a bind $fanbase2
+	$fanbase2 rotatey 245
+
+	$fanblade1b bind $fanbase3
+	$fanblade2b bind $fanbase3
+	$fanblade3b bind $fanbase3
+	$fanblade4b bind $fanbase3
+	$fanbase3 rotatey 285	
+
+	end

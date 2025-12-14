@@ -2,9 +2,9 @@
 ================================================================================
 HUD Library
 for Medal Of Honor
-Version 1.0.0 (09/28/04)
+Version 1.0.1 (04/09/05)
 
-Copyright (c) 2004 Mark Follett
+Copyright (c) 2004-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -186,20 +186,21 @@ end
 update_respawnmode_display:
 	if (level.mef_updatehudall || self.keys["respawnmode"])
 	{
-		if (level.mef_dmrespawning)
+		switch (level.mef_respawnmode)
 		{
-			local.str = "Full Respawn"
-		} else
-		{
-			if (level.mef_freezemode)
-			{
-				local.str = "Freeze Tag"
-			} else
-			{
+			case "none":
 				local.str = "No Respawn"
-			}
+				break
+				
+			case "ft":
+				local.str = "Freeze Tag"
+				break
+				
+			default:
+				local.str = "Full Respawn"
+				break
 		}
-		
+				
 		huddraw_string self.idx ("[" + local.str + "]")
 	}
 end
@@ -366,15 +367,13 @@ end
 
 
 check_respawnmode_changed local.hud:
-	local.respawnmode = level.mef_dmrespawning
-	local.freezemode = level.mef_freezemode
-	
+	local.respawnmode = level.mef_respawnmode
+
 	while (1)
 	{
-		if (local.respawnmode != level.mef_dmrespawning || local.freezemode != level.mef_freezemode)
+		if (local.respawnmode != level.mef_respawnmode)
 		{
-			local.respawnmode = level.mef_dmrespawning
-			local.freezemode = level.mef_freezemode
+			local.respawnmode = level.mef_respawnmode
 			local.hud.keys["respawnmode"] = 1
 			level.mef_updatehud = 1
 		}

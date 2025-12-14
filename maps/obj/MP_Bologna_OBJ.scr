@@ -1,0 +1,196 @@
+//MP_Bologna_OBJ
+//ARCHITECTURE: Julie "Skye" Hughes
+//SCRIPTING: Jason Abbott
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+main:
+
+	setcvar "g_obj_alliedtext1" ""
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" "Bologna"
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "MP_Bologna_OBJ"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "obj":
+		case "ftobj":
+			thread objectivethread
+			break
+	}
+
+	if (level.mef_gametype != "obj" && level.mef_gametype != "ftobj")
+	{
+		//Remove unecessary items from the map when not in obj mode...
+		$bomb1 remove
+		$bomb2 remove
+
+		$bomb_trigger1 remove
+		$bomb_trigger2 remove
+
+		$obj_gate_1 remove
+		$obj_gate_2 remove
+		$obj_gate_3 remove
+	}
+
+	level.music="MP_Bologna"
+
+	level waittill prespawn
+		
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+
+	level.script = maps/obj/MP_Bologna_OBJ.scr
+	exec global/ambient.scr obj_team4
+	exec global/exploder.scr
+	exec global/autobird.scr
+
+	exec global/door_locked.scr::lock
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "2271.13 1622.11 16.13 0 NW Sector" "-520.43 -2480.87 0.13 90 SE Sector"
+	waitthread global/libmef/bases.scr::addbasepair "4064.87 -670.62 0.13 180 NE Corner" "-1844.96 -655.13 0.13 -90 SW Corner"
+end
+
+
+objectivethread:
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Destroy the" )
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "underground" )
+	setcvar "g_obj_alliedtext3" ( loc_convert_string "headquarters" )
+
+	setcvar "g_obj_axistext1" ( loc_convert_string "Protect the" )
+	setcvar "g_obj_axistext2" ( loc_convert_string "headquarters" )
+	setcvar "g_obj_axistext3" ""
+
+	level waittill prespawn
+	
+	level waittill spawn
+	
+	level.defusing_team = "axis"
+	level.planting_team = "allies"
+	level.bombs_to_plant = 1
+	level.targets_to_destroy = 1
+	level.bomb_damage = 300
+	level.bomb_explosion_radius = 1024
+
+	level.bomb_defuse_time = 60 //tenths of a second
+	level.bomb_set_time = 50  //tenths of a second
+	level.bomb_explosion_radius = 1054  //quake units
+	level.bomb_use_distance = 128 //quake units
+	level.bomb_damage = 200
+	level.bombusefov = 30
+
+	level.subtitleX = 100
+	level.subtitleY = 50
+
+	level.dmroundlimit = 5   // round time limit in minutes
+	// set the parameters for this round/wave based match
+	level.clockside = axis // set to axis, allies, kills, or draw
+
+	if (level.mef_gametype != "ftobj")
+	{
+		level.dmrespawning = 0 // 1 or 0
+	}
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+	
+ 	$bomb1 thread global/libmef/bomb.scr::bomb_thinker
+ 	$bomb2 thread global/libmef/bomb.scr::bomb_thinker
+
+	thread bomb_exploded $bomb1 $bomb1_crates
+	thread bomb_exploded $bomb2 $bomb2_crates
+
+	thread axis_win_wait
+	thread allied_win_timer
+
+	if (randomint(2) == 1)
+		addobjective 1 1 "" $bomb1.origin
+	else
+		addobjective 1 1 "" $bomb2.origin
+	setcurrentobjective 1
+end	
+
+
+//*** --------------------------------------------
+//*** Special effects macro
+//*** --------------------------------------------
+
+spawn_fx local.fx:
+	local.temp = spawn script_model model local.fx
+	local.temp notsolid
+	local.temp.origin = self.origin
+	local.temp anim start
+	local.temp playsound explode_truck1
+	local.temp notsolid
+	earthquake .5 2 1 0
+	wait 5
+	local.temp remove
+end
+
+
+//*** --------------------------------------------
+//*** Explode all the crates near the bomb
+//*** --------------------------------------------
+
+explodeCrate:
+	local.wait = 0.1 + randomfloat(0.6)
+	wait local.wait
+	self thread spawn_fx models/fx/fx_tank_explosion.tik
+	wait 0.5
+	self thread spawn_fx models/emitters/tehao_explosionDust.tik
+end
+
+
+//*** --------------------------------------------
+//*** Wait for a bomb to go off
+//*** --------------------------------------------
+
+bomb_exploded local.bomb local.crates:
+	while (local.bomb.exploded != 1)
+		wait .1
+
+	local.crates thread explodeCrate
+end
+
+
+//*** --------------------------------------------
+//*** "Axis Victory"
+//*** --------------------------------------------
+
+axis_win_wait:
+	level waittill axiswin
+end
+
+//*** --------------------------------------------
+//*** "Allied Victory"
+//*** --------------------------------------------
+
+allied_win_timer:
+	while(level.targets_destroyed < level.targets_to_destroy)
+		waitframe
+	
+	waitthread global/libmef/util.scr::do_teamwin allies
+end
+

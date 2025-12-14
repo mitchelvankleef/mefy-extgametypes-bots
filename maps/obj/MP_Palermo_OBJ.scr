@@ -1,0 +1,272 @@
+//MP_Palermo_OBJ
+//ARCHITECTURE: Jeff Zaring
+//SCRIPTING:	Jason Abbott
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+main:
+
+	setcvar "g_obj_alliedtext1" ""
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" "Palermo"
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "MP_Palermo_OBJ"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "obj":
+		case "ftobj":
+			thread objectivethread
+			break
+	}
+
+	if( level.mef_gametype == "ffa" )
+	{
+		$crustywerfer angle 254
+		$crustywerfer_turret0 maxyawoffset 45.0
+		$crustywerfer nodamage
+		$crustywerfer_turret0 nodamage
+	}
+	else
+	{
+		$crustywerfer remove
+	}
+	
+	if (level.mef_gametype != "obj" && level.mef_gametype != "ftobj")
+	{
+		$obj_bomb remove
+		$bomb_trigger remove
+		$AxisHQ remove		
+	}
+
+	level.music="MP_Palermo"
+
+	level waittill prespawn
+
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+
+	level.script = maps/obj/MP_Palermo_OBJ.scr
+	exec global/ambient.scr obj_team4
+	exec global/exploder.scr
+
+	//thread global/exploder.scr::explode 10141
+	//thread global/exploder.scr::main
+	//thread global/minefield.scr::minefield_setup
+
+	exec global/door_locked.scr::lock
+	$dm_door_locked thread global/door_locked.scr::door_locked_wood
+
+	level waittill spawn
+
+	if (level.mef_gametype != "ffa")
+	{
+		$dm_door_1 remove
+		$dm_door_2 remove
+		$dm_door_locked remove
+	}
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "869.4 -1678.77 8.13 90 NE Sector" "-1665.07 1742.95 8.13 -90 SW Sector"
+	waitthread global/libmef/bases.scr::addbasepair "983.56 726.87 48.65 -90 NW Sector" "-962.64 -1184.87 8.13 90 SE Sector"
+end
+
+
+objectivethread:
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Protect the" ) // do not change these objectives
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "Documents" )
+	setcvar "g_obj_alliedtext3" ""
+
+	setcvar "g_obj_axistext1" ( loc_convert_string "Retrieve the" ) // do not change these objectives
+	setcvar "g_obj_axistext2" ( loc_convert_string "Documents" )
+	setcvar "g_obj_axistext3" ""
+
+	level waittill prespawn
+	
+	level waittill spawn
+	
+	level.defusing_team = "allies"
+	level.planting_team = "axis"
+	level.targets_to_destroy = 2 // only one of the two bombs in the level needs to be blown
+	level.bomb_damage = 300
+	level.bomb_explosion_radius = 1024
+
+	level.dmroundlimit = 5   // round time limit in minutes
+	// set the parameters for this round/wave based match
+	level.clockside = allies // set to axis, allies, kills, or draw
+	if (level.mef_gametype != "ftobj")
+	{
+		level.dmrespawning = 0 // 1 or 0
+	}
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	$obj_bomb.explode_thread = maps/obj/mp_palermo_obj.scr::bomb_exploded
+ 	$obj_bomb thread global/libmef/bomb.scr::bomb_thinker
+
+	$obj_bomb.bomb_defuse_time = 20 //tenths of a second
+	$obj_bomb.bomb_set_time = 10  //tenths of a second, 50
+	$obj_bomb.bomb_tick_time = 10  //seconds, 15
+	$obj_bomb.bomb_explosion_radius = 1054  //quake units
+	$obj_bomb.bomb_use_distance = 128 //quake units
+	$obj_bomb.bomb_damage = 200
+	$obj_bomb.bombusefov = 30
+
+	thread axis_win_bomb
+	thread allied_win_timer
+
+	addobjective 1 1 "" $obj_bomb.origin		
+	setcurrentobjective 1
+end
+
+
+bomb_exploded:
+	set_objective_pos $map
+end	
+
+
+//*** --------------------------------------------
+//*** Play a creaking board sound if the player runs up the steps
+//*** --------------------------------------------
+creakyboards:
+	self nottriggerable
+	local.speed = vector_length( parm.other.velocity )
+	if (local.speed > 120) 
+	{
+		self playsound creakyboards
+	}
+	wait 3
+	self triggerable
+end
+
+
+//*** --------------------------------------------
+//*** This player has to run home to win
+//*** --------------------------------------------
+
+view_map local.player:
+	if (local.player.mef_spectator)
+	{
+		end
+	}
+
+	if ( local.player.dmteam != "axis" ) {
+		end
+	}
+
+	if ( ! (local.player cansee $map 60 80) ) {
+		end
+	}
+
+	if ( local.player.seenMap == 1 ) {
+		local.player iprint ( loc_convert_string "You've memorized the map! Run the back to the headquarters!!!" )
+		// local.player iprint ( loc_convert_string ( local.player.netname + " has already memorized the map!!!" ) )
+		end
+	}
+
+	local.player thread run_home_to_win
+end
+
+setCompass:
+	for (local.i = 1; local.i <= $player.size; local.i++)
+	{
+		if ( ! (Isalive $player[local.i] ) )
+			continue
+		if ( $player[local.i].dmteam != "axis" )
+			continue
+		if ( $player[local.i].seenMap != 1 )
+			continue
+		set_objective_pos $AxisHQ[1]
+		end
+	}
+	set_objective_pos $map
+end
+
+run_home_to_win:
+
+	self.seenMap = 1
+
+	set_objective_pos $AxisHQ[1]
+
+	iprintln ( loc_convert_string ( self.netname + " has a copy of the Allies map!" ) )
+	self iprint ( loc_convert_string "You've memorized the map! Run the back to the headquarters!!!" )
+
+	while ( self != NULL )
+	{
+ 		if ( ! (Isalive self) )
+		{
+			iprintln ( loc_convert_string "The Axis spy has been killed!" )
+			self.seenMap = 0
+			thread setCompass
+			end
+		}
+
+		if ( self.dmteam != "axis" )
+		{
+			iprintln ( loc_convert_string "Axis spy has defected!" )
+			self.seenMap = 0
+			thread setCompass
+			end
+		}
+
+		for (local.i = 1; local.i <= $AxisHQ.size; local.i++) {
+			if ( self isinside $AxisHQ[local.i] )
+			{
+				iprintln ( loc_convert_string "The Axis has won!" )
+				thread AxisVictory
+				end
+			}
+		}
+
+		wait 0.1
+	}
+	iprintln ( loc_convert_string "The Axis spy has vanished!" )
+end
+
+//*** --------------------------------------------
+//*** "Axis Victory"
+//*** --------------------------------------------
+
+AxisVictory:
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+end
+
+axis_win_bomb:
+
+	level waittill axiswin
+
+end
+
+//*** --------------------------------------------
+//*** "Allied Victory"
+//*** --------------------------------------------
+
+allied_win_timer:
+
+	level waittill allieswin
+
+end
+

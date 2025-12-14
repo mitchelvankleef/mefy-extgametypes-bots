@@ -3,7 +3,7 @@
 // SCRIPTING: POWZER
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.3 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.2 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,33 +23,21 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm6"
 
-	level.mef_mapname = "mohdm6"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_randomized_ctf_bases
-			thread global/libmef/ctf.scr::ctf_begin
+			thread setup_randomized_ctf_bases
 			break
 
 		case "ft":
+		case "rbm":
 			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread global/libmef/ft.scr::ft_begin
 			break
 
 		case "dem":
 		case "ftdem":
 			waitthread setup_dem_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "rbm":
-			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread roundbasedthread
 			break
 	}
 
@@ -63,28 +51,14 @@ setcvar "g_scoreboardpic" "mohdm6"
 	exec global/ambient.scr mohdm6
 	
 	level waittill spawn
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 
 end
 
 //-----------------------------------------------------------------------------
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
 
 
 setup_dem_bases:
@@ -141,7 +115,13 @@ end
 
 
 setup_randomized_ctf_bases:
-	waitthread setup_spawns
+	waitthread global/libmef/util.scr::read_gametype_settings
+
+	if (level.mef_gametype == "ftctf" || !level.mef_settings["respawn"])
+	{
+		waitthread setup_nonrespawn_ctf_bases
+		end
+	}
 
 	// lists the possible base locations for the map
 	level.ctf_spots[0]  = waitthread new_ctf_spot "1132 -368 304.13 90" "NR"  // North Roof
@@ -179,19 +159,19 @@ setup_randomized_ctf_bases:
 
 	// determines which spawns are disabled for the given base
 	// prevents the opposing team from spawning near a team's base
-	level.ctf_spotspawn["NR"]  = "NR"::"W3N"
-	level.ctf_spotspawn["S3"]  = "S3"::"SST"
-	level.ctf_spotspawn["S2"]  = "S3"::"S2"::"SSB"
-	level.ctf_spotspawn["ED"]  = "SST"::"SSB"::"ES2"
-	level.ctf_spotspawn["E2"]  = "E2"::"ES2"
-	level.ctf_spotspawn["E1"]  = "E1"::"E1B"::"ES1"
-	level.ctf_spotspawn["W3S"] = "S3"::"W3SB"::"W3S"::"W3N"
-	level.ctf_spotspawn["W3N"] = "W3SB"::"W3S"::"W3N"
-	level.ctf_spotspawn["W2S"] = "W2SB"::"W2S"::"W2N"
-	level.ctf_spotspawn["W2N"] = "W2SB"::"W2S"::"W2N"
-	level.ctf_spotspawn["W1S"] = "W1SB"::"W1S"::"W1N"
-	level.ctf_spotspawn["W1N"] = "W1SB"::"W1S"::"W1N"
-	level.ctf_spotspawn["B"]   = "B"::"CS"
+	level.ctf_spotspawn["NR"]  = "NR,W3N"
+	level.ctf_spotspawn["S3"]  = "S3,SST"
+	level.ctf_spotspawn["S2"]  = "S3,S2,SSB"
+	level.ctf_spotspawn["ED"]  = "SST,SSB,ES2"
+	level.ctf_spotspawn["E2"]  = "E2,ES2"
+	level.ctf_spotspawn["E1"]  = "E1,E1B,ES1"
+	level.ctf_spotspawn["W3S"] = "S3,W3SB,W3S,W3N"
+	level.ctf_spotspawn["W3N"] = "W3SB,W3S,W3N"
+	level.ctf_spotspawn["W2S"] = "W2SB,W2S,W2N"
+	level.ctf_spotspawn["W2N"] = "W2SB,W2S,W2N"
+	level.ctf_spotspawn["W1S"] = "W1SB,W1S,W1N"
+	level.ctf_spotspawn["W1N"] = "W1SB,W1S,W1N"
+	level.ctf_spotspawn["B"]   = "B,CS"
 
 	local.spotconfigs = waitthread enumerate_spot_configs level.ctf_spots level.ctf_spotcomps
 	local.spotconfig = local.spotconfigs[randomint(local.spotconfigs.size)]
@@ -206,11 +186,13 @@ setup_randomized_ctf_bases:
 		local.axisspot = local.spotconfig[0]
 	}
 	
-	waitthread block_spawns level.ctf_spotspawn[local.alliedspot.abbr] "axis"
-	waitthread block_spawns level.ctf_spotspawn[local.axisspot.abbr] "allies"
-
 	level.ctf_settings["alliedbase"] = local.alliedspot.pos
 	level.ctf_settings["axisbase"] = local.axisspot.pos
+	
+	level waittill prespawn
+
+	waitthread global/libmef/spawn.scr::close_spawns (waitthread global/libmef/spawn.scr::define_spawnregion "axis" level.ctf_spotspawn[local.alliedspot.abbr])
+	waitthread global/libmef/spawn.scr::close_spawns (waitthread global/libmef/spawn.scr::define_spawnregion "allies" level.ctf_spotspawn[local.axisspot.abbr])
 end
 
 
@@ -238,74 +220,26 @@ enumerate_spot_configs local.spots local.spotconfigs:
 end local.result
 
 
-new_spawn local.abbr local.dmorigin local.alorigin local.axorigin local.angle:
-	local.ent = spawn Listener
-	local.ent.abbr = local.abbr
-	local.ent.dmorigin = local.dmorigin
-	local.ent.alorigin = local.alorigin
-	local.ent.axorigin = local.axorigin
-	local.ent.angles = ( 0 local.angle 0 )
-end local.ent
-
-
-block_spawns local.spawnnames local.team:
-	for (local.i = 1; local.i < (local.spawnnames.size + 1); local.i++)
+setup_nonrespawn_ctf_bases:
+	waitthread global/libmef/spawn.scr::spawnblock_begin
+	
+	if (level.mef_alliedspawnregion == "se")
 	{
-		waitthread block_spawn level.ctf_spawnlu[local.spawnnames[local.i]] local.team
-	}
-end
-
-
-block_spawn local.spawn local.team:
-	local.ent = spawn script_model
-	local.ent model "items/dm_50_healthbox.tik"
-
-	if (local.team == "allies")
-	{
-		local.ent.origin = local.spawn.alorigin
-	} else if (local.team == "axis")
-	{
-		local.ent.origin = local.spawn.axorigin
+		local.seteam = "allies"
+		local.nwteam = "axis"
 	} else
 	{
-		local.ent.origin = local.spawn.dmorigin
+		local.seteam = "axis"
+		local.nwteam = "allies"
 	}
 
-	local.ent.angles = local.spawn.angles
-	local.ent hide
-	local.ent setsize ( 0 0 0 ) ( 1 1 16 )
-end local.ent
+	waitthread global/libmef/bases.scr::addbase local.seteam "-553 -872 272.13 90" // East Bldg Dresser
+	waitthread global/libmef/bases.scr::addbase local.seteam "-132 -624 272.13 90" // East Bldg 2nd Floor
+	waitthread global/libmef/bases.scr::addbase local.seteam "-107 -624 32.12 90"  // East Bldg 1st Floor
 
-
-setup_spawns:
-	level.ctf_spawns[0]  = waitthread new_spawn "B"    ( 240 -104 -136 )  ( 240 -136 -136 )  ( 240 -72 -136 )  315 // Boiler Room
-	level.ctf_spawns[1]  = waitthread new_spawn "ES1"  ( -408 -768 48 )   ( -408 -808 48 )   ( -400 -720 48 )    0 // East Bldg Staircase 1st Floor
-	level.ctf_spawns[2]  = waitthread new_spawn "ES2"  ( -422 -809 288 )  ( -420 -845 288 )  ( -420 -773 288 )  45 // East Bldg Staircase 2nd Floor
-	level.ctf_spawns[3]  = waitthread new_spawn "E2"   ( -632 -578 288 )  ( -632 -610 288 )  ( -664 -586 288 )  90 // East Bldg 2nd Floor
-	level.ctf_spawns[4]  = waitthread new_spawn "W0"   ( -400 824 -136 )  ( -400 792 -136 )  ( -400 856 -136 )   0 // West Bldg Ground Floor
-	level.ctf_spawns[5]  = waitthread new_spawn "WSB"  ( 418 839 -136 )   ( 418 807 -136 )   ( 418 871 -136 )  225 // West Bldg Staircase Bottom
-	level.ctf_spawns[6]  = waitthread new_spawn "W1N"  ( 244 992 48 )     ( 244 984 48 )     ( 244 1008 48 )     0 // West Bldg 1st Floor North Side
-	level.ctf_spawns[7]  = waitthread new_spawn "W2N"  ( 236 992 288 )    ( 236 984 288 )    ( 236 1008 288 )    0 // West Bldg 2nd Floor North Side
-	level.ctf_spawns[8]  = waitthread new_spawn "W2SB" ( -432 919 288 )   ( -432 911 288 )   ( -432 935 288 )  270 // West Bldg 2nd Floor South Side Bathroom
-	level.ctf_spawns[9]  = waitthread new_spawn "W1SB" ( -432 919 48 )    ( -432 911 48 )    ( -432 935 48 )   270 // West Bldg 1st Floor South Side Bathroom
-	level.ctf_spawns[10] = waitthread new_spawn "W3SB" ( -448 991 528 )   ( -408 991 528 )   ( -488 991 528 )  270 // West Bldg 3rd Floor South Side Bathroom
-	level.ctf_spawns[11] = waitthread new_spawn "W1S"  ( -312 928 48 )    ( -312 896 48 )    ( -312 960 48 )     0 // West Bldg 1st Floor South Side
-	level.ctf_spawns[12] = waitthread new_spawn "W3S"  ( -312 936 528 )   ( -312 896 528 )   ( -312 984 528 )    0 // West Bldg 3rd Floor South Side
-	level.ctf_spawns[13] = waitthread new_spawn "W2S"  ( -280 936 288 )   ( -280 904 288 )   ( -280 968 288 )    0 // West Bldg 2nd Floor South Side
-	level.ctf_spawns[14] = waitthread new_spawn "W3N"  ( 248 992 528 )    ( 248 944 528 )    ( 248 1040 528 )    0 // West Bldg 3rd Floor North Side
-	level.ctf_spawns[15] = waitthread new_spawn "SST"  ( -1152 -32 512 )  ( -1152 -72 512 )  ( -1152 8 512 )     0 // South Bldg Staircase Top
-	level.ctf_spawns[16] = waitthread new_spawn "SSB"  ( -964 -184 262 )  ( -964 -192 262 )  ( -964 -168 262 ) 225 // South Bldg Staircase Bot
-	level.ctf_spawns[17] = waitthread new_spawn "E1"   ( -484 -570 48 )   ( -484 -610 48 )   ( -484 -530 48 )    0 // East Bldg 1st Floor
-	level.ctf_spawns[18] = waitthread new_spawn "S3"   ( -1136 816 512 )  ( -1136 784 512 )  ( -1136 848 512 )   0 // South Bldg 3rd Floor
-	level.ctf_spawns[19] = waitthread new_spawn "ES0"  ( -336 -524 -147 ) ( -336 -556 -147 ) ( -336 -492 -147 )  0 // East Bldg Staircase Ground Floor
-	level.ctf_spawns[20] = waitthread new_spawn "CS"   ( -664 808 -147 )  ( -704 800 -147 )  ( -624 816 -147 ) 270 // Courtyard South
-	level.ctf_spawns[21] = waitthread new_spawn "CN"   ( 880 -48 -136 )   ( 912 -48 -136 )   ( 848 -48 -136 )   90 // Courtyard North
-	level.ctf_spawns[22] = waitthread new_spawn "NR"   ( 1040 608 314 )   ( 1072 608 314 )   ( 1008 608 314 )  270 // North Roof
-	level.ctf_spawns[23] = waitthread new_spawn "E1B"  ( -618 -614 48 )   ( -650 -614 48 )   ( -586 -614 48 )   90 // East Bldg 1st Floor Bathroom
-	level.ctf_spawns[24] = waitthread new_spawn "S2"   ( -1136 817 260 )  ( -1136 785 260 )  ( -1136 849 260 )   0 // South Bldg 2nd Floor
-
-	for (local.i = 0; local.i < level.ctf_spawns.size; local.i++)
-	{
-		level.ctf_spawnlu[level.ctf_spawns[local.i].abbr] = level.ctf_spawns[local.i]
-	}
+	waitthread global/libmef/bases.scr::addbase local.nwteam "829 1088 512.13 -90" // West Bldg 3rd Floor North Side
+	waitthread global/libmef/bases.scr::addbase local.nwteam "-512 699 272.13 0"   // West Bldg 2nd Floor South Side
+	waitthread global/libmef/bases.scr::addbase local.nwteam "829 1088 272.14 -90" // West Bldg 2nd Floor North Side
+	waitthread global/libmef/bases.scr::addbase local.nwteam "-512 697 32.13 0"    // West Bldg 1st Floor South Side
+	waitthread global/libmef/bases.scr::addbase local.nwteam "829 1088 32.13 -90"  // West Bldg 1st Floor North Side
 end

@@ -3,7 +3,7 @@
 // SCRIPTING: NED
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.2 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,31 +23,13 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm2"
 
-	level.mef_mapname = "mohdm2"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 	}
 
@@ -61,7 +43,10 @@ setcvar "g_scoreboardpic" "mohdm2"
 	exec global/ambient.scr mohdm2
 	
 	level waittill spawn
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 
 	//add in our kill brush under the cheat point.
 	local.killbrush = spawn trigger_hurt
@@ -73,32 +58,21 @@ end
 
 //-----------------------------------------------------------------------------
 
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
-
 
 setup_bases:
+	waitthread global/libmef/util.scr::read_gametype_settings
+	
 	// common bases for dem and ctf
-	waitthread global/libmef/bases.scr::addbasepair "-2162 -2584 -123.02 20 Allied Halftrack" "-1278 1038 13.08 155 88mm Flak Cannon" m3 flak88
-	waitthread global/libmef/bases.scr::addbasepair "-754.96 -2688.59 -45.18 60 Sherman Tank" "-2684.66 639.32 37.35 -114 Panzer Tank" shermantank panzer ( 7 60 358 ) ( 0 246 2 )
-	waitthread global/libmef/bases.scr::addbasepair "-1428 -3408 -17.32 0 East Bldg Ammo Crate" "-2629 1765 216.13 0 Barn Ammo Crate" indycrate indycrate
-	waitthread global/libmef/bases.scr::addbasepair "-3163.42 -1963.39 -68.49 70 GMC Truck" "506.45 -284.35 -57.75 -116 Opel Truck" gmctruck opeltruck ( 0 70 3 ) ( 3 244 358 )
+	waitthread global/libmef/bases.scr::addbasepair "-2162 -2584 -123.02 20 E: Halftrack" "-1278 1038 13.08 155 W: Flak Cannon" m3 flak88
+	waitthread global/libmef/bases.scr::addbasepair "-754.96 -2688.59 -45.18 60 NE: Sherman Tank" "-2684.66 639.32 37.35 -114 SW: Panzer Tank" shermantank panzer ( 7 60 358 ) ( 0 246 2 )
+	waitthread global/libmef/bases.scr::addbasepair "-3163.42 -1963.39 -68.49 70 SE: GMC Truck" "506.45 -284.35 -57.75 -116 NW: Opel Truck" gmctruck opeltruck ( 0 70 3 ) ( 3 244 358 )
 	waitthread global/libmef/bases.scr::addbasepair "-2386 -1936 8.12 -40 Center Bldg HQ" "-569 207 40.12 60 Church HQ" cardtable cardtable
 
+	if ((level.mef_gametype == "dem" || level.mef_gametype == "ftdem") && level.mef_deepbases)
+	{
+		waitthread global/libmef/bases.scr::addbasepair "-1428 -3408 -17.32 0 East Bldg Ammo Crate" "-2629 1765 216.13 0 Barn Ammo Crate" indycrate indycrate
+	}
+	
 	// additional bases for ctf only
 	if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
 	{

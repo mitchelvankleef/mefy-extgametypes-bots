@@ -1,0 +1,374 @@
+// TUNISIA
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+// -------------------------------------------------------------------------------------
+main:
+// -------------------------------------------------------------------------------------
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Tunisia"
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_alliedtext4" ""
+	setcvar "g_obj_alliedtext5" ""
+	
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+	setcvar "g_obj_axistext4" ""
+	setcvar "g_obj_axistext5" ""
+
+	setcvar "g_scoreboardpic" "mp_tunisia_lib"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "lib":
+			thread liberationthread
+			break
+	}
+
+	exec global/dm_ai.scr
+	//level var init
+	level.bAlliesGateSwitchDown		= 0
+	level.music="MP_Tunisia"
+
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	if (level.mef_gametype != "lib")
+	{
+		$alliesjail disablespawn
+		$axisjail disablespawn
+	}
+
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+	exec global/door_locked.scr
+
+	level.script = maps/lib/mp_tunisia_lib.scr
+	exec global/ambient.scr mohdm1
+
+	//init our switches
+	thread InitSwitches
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	$gate_switch_trigger thread TriggerAlliesGate
+	$shutter1trigger thread TriggerShutter1
+	$shutter2trigger thread TriggerShutter2
+	$shutter3trigger thread TriggerShutter3
+	
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-790 -655 21.81 -90 NW Street" "2959.95 -15.13 332.90 -90 NE Street"
+	waitthread global/libmef/bases.scr::addbasepair "-1042.24 -2384.87 22.56 90 SW Corridor" "2717.43 -1103.13 329.10 -90 SE Street"
+end
+
+
+liberationthread:
+	// Can specify different scoreboard messages for round based
+	// games here.
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	huddraw_color 101 1 1 1
+	huddraw_color 102 1 1 1
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	// set the parameters for this round based match
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+	
+	/////////////////////////
+	waitthread global/libmef/util.scr::waittill_roundstart
+	/////////////////////////
+
+	// obj#, status, text, location
+	// status -- 1) don't draw, 2) in progress, 3) completed		
+	addobjective 1 1 "Free teammates from the jail" $alliesjailswitch.origin		
+	addobjective 2 1 "Free teammates from the jail" $axisjailswitch.origin
+
+	setcurrentobjective 1 allies
+	setcurrentobjective 2 axis
+
+	//Setup our jail break triggers
+	$axisjailtrigger thread AxisJailTrigger
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	thread global/lib_dm.scr::InitLiberationIcons
+
+	//disable invulnerable respawn. This could be used to keep jails open
+	setcvar "g_invulnoverride" "1"
+
+	wait 15
+
+	thread global/lib_dm.scr::playerwatch
+	
+	$alliesjail enablespawn
+	$axisjail enablespawn
+	$alliesnonjail disablespawn
+	$axisnonjail disablespawn
+end
+
+
+// -------------------------------------------------------------------------------------
+AxisJailTrigger:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	//set the player using the jail switch trigger
+	local.player = parm.other
+
+	//flip the switch first
+	if( local.player.dmteam == axis )
+	{
+		waitthread DoAxisSwitch
+
+		thread global/lib_dm.scr::axisjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAxisSwitch
+	}
+
+	$axisjailtrigger thread AxisJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+AlliesJailTrigger:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	local.player = parm.other
+	
+	//flip the switch first
+	if( local.player.dmteam == allies )
+	{
+		waitthread DoAlliesSwitch
+
+		thread global/lib_dm.scr::alliesjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAlliesSwitch
+	}
+
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAxisSwitch:
+// -------------------------------------------------------------------------------------		
+	
+	if( level.bAxisSwitchDown == 0 )
+	{			
+		//the anim name is a little backwards but ok
+		$axisjailswitch anim turnoff
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 1
+	}
+	else
+	{			
+		$axisjailswitch anim turnon
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 0
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAlliesSwitch:
+// -------------------------------------------------------------------------------------
+
+	if( level.bAlliesSwitchDown == 0 )
+	{			
+		//the anim name is a little backwards but ok
+		$alliesjailswitch anim turnoff
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 1		
+	}
+	else
+	{			
+		$alliesjailswitch anim turnon
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 0		
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerAlliesGate:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerAlliesGate
+	}
+
+	waitthread DoAlliesGateSwitch
+	
+	if( $allies_gate[1].isOpen != 1 )
+	{			
+		$allies_gate open $allies_gate_origin
+	}
+	else
+	{			
+		$allies_gate close
+	}
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAlliesGateSwitch:
+// -------------------------------------------------------------------------------------
+
+	if( level.bAlliesGateSwitchDown == 0 )
+	{			
+		$allies_gate_switch_origin speed 1.0
+		$allies_gate_switch_origin rotatexdownto 90
+		$allies_gate_switch_origin waitmove
+		$allies_gate_switch_origin playsound switchbox 
+		level.bAlliesGateSwitchDown = 1		
+	}
+	else
+	{			
+		$allies_gate_switch_origin rotatexupto -90
+		$allies_gate_switch_origin waitmove
+		level.bAlliesGateSwitchDown = 0		
+	}	
+
+	thread TriggerAlliesGate
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter1:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter1
+	}
+
+	if( $shutter1[1].isOpen != 1 )
+	{			
+		$shutter1 open $shutter1_origin
+	}
+	else
+	{			
+		$shutter1 close
+	}
+
+	$shutter1trigger thread TriggerShutter1
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter2:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter2
+	}
+
+	if( $shutter2[1].isOpen != 1 )
+	{			
+		$shutter2 open $shutter2_origin
+	}
+	else
+	{			
+		$shutter2 close
+	}									   
+
+	$shutter2trigger thread TriggerShutter2
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter3:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter3
+	}
+
+	if( $shutter3[1].isOpen != 1 )
+	{			
+		$shutter3 open $shutter3_origin
+	}
+	else
+	{			
+		$shutter3 close
+	}
+
+	$shutter3trigger thread TriggerShutter3
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+InitSwitches:
+// -------------------------------------------------------------------------------------
+		
+	$allies_gate_switch bind $allies_gate_switch_origin
+
+	$allies_gate_switch notsolid
+
+	end
+

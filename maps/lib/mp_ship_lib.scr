@@ -1,0 +1,541 @@
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//-------------------------------------
+main:
+//-------------------------------------
+
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Stuckguter" )
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "textures/mohmenu/dmloading/mp_ship_lib"
+
+	level.mef_defaultgametype = "ftobj"
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "obj":
+		case "ftobj":
+			thread ObjectiveMode
+			break
+
+		case "lib":
+			thread liberationthread
+			break
+	}
+
+	exec global/DMprecache.scr
+	level.mp_boat_level = 1
+	exec global/MP_Boat_level_weather.scr
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+	
+	if (level.mef_gametype != "lib")
+	{
+		$alliesjail disablespawn
+		$axisjail disablespawn
+	}
+
+	exec global/door_locked.scr
+	exec global/dm_ai.scr
+
+	if($red_corona)
+		thread Red_Coronas
+
+	level.music="MP_Anzio"
+	level.script = maps/lib/mp_ship_lib.scr
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+	thread ShipTilt
+	thread BoatTilt
+	thread CenterpieceTilt
+
+//	level.rain_speed = "32"
+//	level.rain_speed_vary = "16"
+//	level.rain_length = "2"
+//	level.rain_width = "1"
+//	level.rain_density = ".2"
+//	level.rain_slant = "250"
+//	level.rain_min_dist = "1800"
+//	level.rain_numshaders = 12
+//	level.rain_shader = "textures/rain"
+End
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "997.5 -3744.25 -287.88 90 Lower Deck East" "534.5 115.66 -95.88 0 Middle W Stairwell"
+	waitthread global/libmef/bases.scr::addbasepair "850.16 -3727.87 100.13 90 Upper Deck E" "975.34 20.35 -287.88 -90 Lower Deck W"
+end
+
+
+liberationthread:
+	// Can specify different scoreboard messages for round based
+	// games here.
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	huddraw_color 101 1 1 1
+	huddraw_color 102 1 1 1
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	// set the parameters for this round based match
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+	
+	/////////////////////////
+	waitthread global/libmef/util.scr::waittill_roundstart
+	/////////////////////////
+
+	// obj#, status, text, location
+	// status -- 1) don't draw, 2) in progress, 3) completed		
+	addobjective 1 1 "Free teammates from the jail" $alliesjailswitch.origin		
+	addobjective 2 1 "Free teammates from the jail" $axisjailswitch.origin
+
+	setcurrentobjective 1 allies
+	setcurrentobjective 2 axis
+
+	//Setup our jail break triggers
+	$axisjailtrigger thread AxisJailTrigger
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	thread global/lib_dm.scr::InitLiberationIcons
+
+	//disable invulnerable respawn. This could be used to keep jails open
+	setcvar "g_invulnoverride" "1"
+
+	wait 15
+
+	thread global/lib_dm.scr::playerwatch
+	
+	$alliesjail enablespawn
+	$axisjail enablespawn
+	$alliesnonjail disablespawn
+	$axisnonjail disablespawn
+end
+
+
+// -------------------------------------------------------------------------------------
+AxisJailTrigger:
+// -------------------------------------------------------------------------------------
+		
+	self waittill trigger	
+
+	//set the player using the jail switch trigger
+	local.player = parm.other
+
+	//flip the switch first
+	if( local.player.dmteam == axis )
+	{
+		waitthread DoAxisSwitch
+
+		thread global/lib_dm.scr::axisjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAxisSwitch
+	}
+
+	$axisjailtrigger thread AxisJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+AlliesJailTrigger:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	local.player = parm.other
+	
+	//flip the switch first
+	if( local.player.dmteam == allies )
+	{
+		waitthread DoAlliesSwitch
+
+		thread global/lib_dm.scr::alliesjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAlliesSwitch
+	}
+
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAxisSwitch:
+// -------------------------------------------------------------------------------------
+		
+	if( level.bAxisSwitchDown == 0 )
+	{			
+		$axisjailswitch anim turnoff
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 1
+	}
+	else
+	{			
+		
+		$axisjailswitch anim turnon
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 0
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAlliesSwitch:
+// -------------------------------------------------------------------------------------
+
+	if( level.bAlliesSwitchDown == 0 )
+	{			
+		$alliesjailswitch anim turnoff
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 1		
+	}
+	else
+	{			
+		$alliesjailswitch anim turnon
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 0		
+	}	
+
+
+end
+
+//------------------------------------------------------------------
+ShipTilt:
+
+	local.bail = getcvar(g_no_seasick)
+	if ( local.bail == "1" )
+	{
+		end
+	}
+
+	while(!$player[1])
+		waitframe
+	level.maxTilt = 2.5 
+	level.oldMaxTilt = 2.5
+	level.dampening = 1
+	local.viewangles = (0 0 0)
+	local.viewangles[2] = level.maxTilt
+	for(local.i = 1; local.i <= $player.size; local.i++)
+		$player[local.i].viewangles = local.viewangles
+	local.velocity = -1
+	local.constant = -.0005 // -0.002
+	
+	while (1)
+	{
+//		for(local.i = 1; local.i <= $player.size; local.i++)
+//			$player[local.i] iprint ("viewpos: " + $player[local.i].viewangles)
+//		iprintln ("LASTVEL: " + local.velocity)
+//		iprintln ("VEL: " + local.velocity)
+		if (local.viewangles[2] > level.maxTilt && local.velocity > 0)
+		{
+			local.velocity = 0
+		}
+		else if (local.viewangles[2] < -level.maxTilt && local.velocity < 0)
+		{
+			local.velocity = 0
+		}
+	
+		local.velocity += local.constant * local.viewangles[2]
+/*
+		for(local.i = 1; local.i <= 3; local.i++)
+		{
+			local.targetname =	("boat_" + local.i )
+			local.angles = $(local.targetname).angles
+			local.angles[2] += local.velocity
+			$(local.targetname).angles = local.angles
+		}
+*/
+		for(local.i = 1; local.i <= $player.size; local.i++)
+		{
+			local.viewangles = $player[local.i].viewangles
+			local.viewangles[2] += local.velocity
+			$player[local.i].viewangles =  local.viewangles
+		}
+		waitframe
+	}
+
+	// Reset the players view
+	local.viewangles = $player.viewangles
+	local.viewangles[2] = 0
+	$player.viewangles = local.viewangles
+
+End
+
+//------------------------------------------------------------------
+BoatTilt:
+
+	while(!$player[1])
+		waitframe
+	local.maxTiltz = 8.5
+	local.amt_z = 2.0
+	local.amt_x = 0.5
+	local.maxTiltx = 4.5 
+		
+	for(local.i = 1; local.i <= 4; local.i++)
+		{
+			local.targetname =	("boat_" + local.i )
+			local.myangles = $(local.targetname).angles
+			local.myorigin = $(local.targetname).origin
+			local.mymodel = $(local.targetname).model
+			$(local.targetname) delete
+			waitframe
+			local.coolboat = spawn script_object "model" local.mymodel "origin" local.myorigin "angles" local.myangles
+			local.coolboat targetname local.targetname
+			local.coolboat notsolid
+			$(local.targetname) rotateZ local.amt_z
+//			$(local.targetname) rotateX local.amt_x
+		}
+	local.velocity = -1
+	local.constant = -.0005 // -0.002
+
+	while (1)
+	{
+//		iprintln ( "angles: z: " + $boat_1.angles[2] + " x: " + $boat_1.angles[0])
+		for(local.i = 1; local.i <= 4; local.i++)
+		{
+			local.targetname =	("boat_" + local.i )
+//			iprintln (" " + local.targetname + ": angles = " +  $(local.targetname).angles)
+			
+			if ($(local.targetname).angles[2] >= local.maxTiltz &&
+				$(local.targetname).angles[2] < ((360 - local.maxTiltz) - 1) )
+			{
+//				iprintln ("+z")
+				$(local.targetname) rotateZ -local.amt_z
+			}
+			else if ($(local.targetname).angles[2] < (360 - local.maxTiltz) &&
+				$(local.targetname).angles[2] > (local.maxTiltz + 1 ))
+			{
+//				iprintln ("-z")
+				$(local.targetname) rotateZ local.amt_z
+			}
+			
+/*
+			if ($(local.targetname).angles[1] >= local.maxTiltx &&
+				$(local.targetname).angles[1] < ((local.maxTiltx) - 1) )
+			{
+				iprintln ("+x")
+				$(local.targetname) rotateX -local.amt_x
+			}
+			else if ($(local.targetname).angles[1] < (360 - local.maxTiltx) &&
+				$(local.targetname).angles[1] > (local.maxTiltx + 1 ))
+			{
+				iprintln ("-x")
+				$(local.targetname) rotateX local.amt_x
+			}
+*/		
+		}
+		waitframe
+
+	}
+End
+
+CenterpieceTilt:
+	local.maxTiltz = 2.5
+	local.maxTiltx = 1.47 
+
+	local.constant = -.003 // -0.002
+	local.constantX = -0.0022
+	local.velocity = -0.4
+	local.velocityX = -0.33
+
+
+	wait .7
+/*
+	local.angles = $(local.targetname).angles
+	local.angles[2] += 4.5
+	local.angles[0] += 0.5
+	$centerpiece angles local.angles
+*/
+	while (1)
+	{
+//		iprintln ("viewpos: " + $centerpiece.angles)
+//		iprintln ("VEL: " + local.velocity)
+
+		local.tmp = $centerpiece.angles[2]
+
+		if ( local.tmp > 180 )
+			local.tmp -= 360
+
+		if (local.tmp > local.maxTiltz && local.velocity > 0)
+		{
+			local.velocity = 0
+		}
+		else if (local.tmp < -local.maxTiltz && local.velocity < 0)
+		{
+			local.velocity = 0
+		}
+	
+		local.velocity += local.constant * local.tmp
+
+		local.tmp = $centerpiece.angles[0]
+
+		if ( local.tmp > 180 )
+			local.tmp -= 360
+
+		if (local.tmp > local.maxTiltx && local.velocityX > 0)
+		{
+			local.velocityX = 0
+		}
+		else if (local.tmp < -local.maxTiltx && local.velocityX < 0)
+		{
+			local.velocityX = 0
+		}
+	
+		local.velocityX += local.constantX * local.tmp
+
+		$centerpiece rotateZ (local.velocity  * 20 )
+		$centerpiece rotateX (local.velocityX * 20 )
+
+		//local.viewangles = $centerpiece.angles
+		//local.viewangles[2] += local.velocity
+		//local.viewangles[0] += local.velocityX
+		//$centerpiece angles local.viewangles
+		
+		waitframe
+	}
+
+End
+
+
+// used to make the coronas blink, starts thread on each one of Flicker
+Red_Coronas:
+	for(local.i = 1; local.i <= $red_corona.size; local.i++)
+		$red_corona[local.i] thread Flicker
+End
+
+Flicker:
+	while (1)
+	{
+		self show
+		local.number = randomfloat(3) + 1
+		wait local.number
+		self hide
+		wait randomfloat(2)
+		waitframe
+	}
+End
+
+// Created Objective Mode
+ObjectiveMode:
+		setcvar "g_obj_alliedtext1" ( loc_convert_string "Disable the" )
+		setcvar "g_obj_alliedtext2" ( loc_convert_string "Engine Room" )
+		setcvar "g_obj_alliedtext3" ""
+
+		setcvar "g_obj_axistext1" ( loc_convert_string "Protect the" )
+		setcvar "g_obj_axistext2" ( loc_convert_string "Engine Room" )
+		setcvar "g_obj_axistext3" ""
+
+		$alliesjailswitch remove		
+		$axisjailswitch remove
+		$axisjaildoor remove
+		$alliesjaildoor remove
+
+		level waittill prespawn
+		
+		level waittill spawn
+			
+		local.bomborigin = (808 -612 -266)
+		level.defusing_team = "axis" // allies
+		level.planting_team = "allies"  // axis
+		level.bombs_to_plant = 1
+		level.targets_to_destroy = 1
+		level.bomb_damage = 600
+		level.bomb_explosion_radius = 1024
+
+		level.bomb_defuse_time = 60 //tenths of a second
+		level.bomb_set_time = 50  //tenths of a second
+		level.bomb_explosion_radius = 1054  //quake units
+		level.bomb_use_distance = 128 //quake units
+		level.bomb_damage = 200
+		level.bombusefov = 30
+
+		level.subtitleX = 100
+		level.subtitleY = 50
+		level.dmroundlimit = 5   // round time limit in minutes
+		// set the parameters for this round/wave based match
+		level.clockside = axis // set to axis, allies, kills, or draw
+		if (level.mef_gametype != "ftobj")
+		{
+			level.dmrespawning = 0 // 1 or 0
+		}
+		
+		spawn script_model "targetname" "bomb1" "model" "items/pulse_explosive.tik" "origin" local.bomborigin
+		local.crate = spawn script_model "targetname" "fakecrate" "origin" (808 -612 -296)
+		
+		wait 1.0
+		$bomb1.trigger_name = spawn trigger_use "origin" $bomb1.origin targetname "Bomb1Trigger"
+		$bomb1.explosion_fx = "fx/fx_flak88_explosion.tik"
+		$bomb1.explosion_sound = "explode_aagun"
+		waitframe
+		$bomb1.angle = 90
+		$bomb1.trigger_name setsize ( -40 -40 -40) (40 40 40)
+		
+		waitthread global/libmef/util.scr::waittill_roundstart
+		
+		$bomb1 thread global/libmef/bomb.scr::bomb_thinker
+
+		$bomb1.bomb_defuse_time = 20 //tenths of a second
+		$bomb1.bomb_set_time = 50  //tenths of a second, 50
+		$bomb1.bomb_tick_time = 15  //seconds, 15
+		$bomb1.bomb_explosion_radius = 500  //quake units
+		$bomb1.bomb_use_distance = 128 //quake units
+		$bomb1.bomb_damage = 200000
+		$bomb1.bombusefov = 30
+ 
+	  	thread allied_win_bomb
+
+		addobjective 1 1 "" $bomb1.origin
+		setcurrentobjective 1
+End
+
+
+allied_win_bomb:
+	while(level.targets_destroyed < level.targets_to_destroy)
+		waitframe
+
+	waitthread global/libmef/util.scr::do_teamwin allies
+end

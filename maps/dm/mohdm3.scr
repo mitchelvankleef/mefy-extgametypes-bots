@@ -3,7 +3,7 @@
 // SCRIPTING: POWZER
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.2 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.2 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,31 +23,13 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm3"
 
-	level.mef_mapname = "mohdm3"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 	}
 
@@ -62,46 +44,25 @@ setcvar "g_scoreboardpic" "mohdm3"
 thread global/door_locked.scr::lock
 
 	level waittill spawn
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 
 end
 
 //-----------------------------------------------------------------------------
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
 
 
 setup_bases:
 	waitthread global/libmef/util.scr::read_gametype_settings
 
 	// common bases for dem and ctf
-	waitthread global/libmef/bases.scr::addbasepair "969 -1057 -71.88 -90 Euro Car" "3221 -2787 2.58 90 Delivery Truck" car deliverytruck
-	waitthread global/libmef/bases.scr::addbasepair "1398 -3145 2.08 -90 Clock Tower" "3875 -1199 16.13 180 Library" indycrate librarytable
-	waitthread global/libmef/bases.scr::addbasepair "1887 -615 -5.88 -90 Gallery Radio Station" "2366 -2027 50 0 Gallery Power Box" radiostation powerpanel
-	waitthread global/libmef/bases.scr::addbasepair "1323 150 -63.88 -75 BMW Motorcycle" "3448 -3786 0.46 -8 Mercedes" bmwbike mercedes
-	waitthread global/libmef/bases.scr::addbasepair "544 -1493 -51.26 180 Allied Explosives Cache" "3747 -2309 8.13 -125 Axis Explosives Cache" tntcrate tntcrate
-
-	// deep bases
-	if (level.mef_deepbases)
-	{
-		waitthread global/libmef/bases.scr::addbasepair "711 -451 -68.89 -27 Allied Halftrack" "5650 -2458 0.13 110 Axis Halftrack" m3 sdkfz ( 1 333 0 )
-		waitthread global/libmef/bases.scr::addbasepair "758 418 214.13 -90 Allied Radio" "5019 -3366 96.13 180 Axis Enigma Device" radio enigma
-	}
+	waitthread global/libmef/bases.scr::addbasepair "969 -1057 -71.88 -90 S: Euro Car" "3221 -2787 2.58 90 N: Delivery Truck" car deliverytruck
+	waitthread global/libmef/bases.scr::addbasepair "1514 -2663 0.13 90 SE: Clock Tower" "3875 -1199 16.13 180 NW: Library" indycrate librarytable
+	waitthread global/libmef/bases.scr::addbasepair "1887 -615 -5.88 -90 W: Gallery Radio Station" "2366 -2027 50 0 E: Gallery Power Box" radiostation powerpanel
+	waitthread global/libmef/bases.scr::addbasepair "1323 150 -63.88 -75 SW: Motorcycle" "3448 -3786 0.46 -8 NE: Mercedes" bmwbike mercedes
+	waitthread global/libmef/bases.scr::addbasepair "544 -1493 -51.26 180 S: Explosives Cache" "3747 -2309 8.13 -125 C: Explosives Cache" tntcrate tntcrate
 	
 	// additional bases for ctf only
 	if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
@@ -112,6 +73,12 @@ setup_bases:
 	// additional bases for dem only
 	if (level.mef_gametype == "dem" || level.mef_gametype == "ftdem")
 	{
-		waitthread global/libmef/bases.scr::addbasepair "1693 -1705 144.13 0 Gallery Dining Room" "2398 -1705 144.13 -180 Gallery Dining Room" voodoo voodoo
+		waitthread global/libmef/bases.scr::addbasepair "1693 -1705 144.13 0 C: Gallery Dining Room" "2398 -1705 144.13 -180 C: Gallery Dining Room" voodoo voodoo
+
+		if (level.mef_deepbases)
+		{
+			waitthread global/libmef/bases.scr::addbasepair "711 -451 -68.89 -27 S: Halftrack" "5650 -2458 0.13 110 N: Halftrack" m3 sdkfz ( 1 333 0 )
+			waitthread global/libmef/bases.scr::addbasepair "758 418 214.13 -90 S: Radio" "5019 -3366 96.13 180 N: Enigma Device" radio enigma
+		}
 	}
 end

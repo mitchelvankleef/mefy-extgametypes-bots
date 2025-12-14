@@ -1,0 +1,672 @@
+/*
+================================================================================
+Gametype Selection and Settings Library
+for Medal Of Honor
+Version 1.0.2 (05/14/05)
+
+Copyright (c) 2005 Mark Follett
+email: mef123@geocities.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished
+to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+================================================================================
+*/
+
+
+register_gametypes:
+	level.mef_basegtypes[1] = "ffa"
+	level.mef_basegtypes[2] = "tdm"
+	level.mef_basegtypes[3] = "rbm"
+	level.mef_basegtypes[4] = "obj"
+
+	level.mef_gametypes["ffa"] = global/libmef/gametypes.scr::init_gametype
+	level.mef_gametypes["tdm"] = global/libmef/gametypes.scr::init_gametype
+	level.mef_gametypes["rbm"] = global/libmef/gametypes.scr::init_gametype
+	level.mef_gametypes["obj"] = global/libmef/gametypes.scr::init_gametype
+
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		level.mef_basegtypes[5] = "tow"
+		level.mef_gametypes["tow"] = global/libmef/gametypes.scr::init_gametype
+	}
+	
+	if (level.mef_baseversion == "bt")
+	{
+		level.mef_basegtypes[6] = "lib"
+		level.mef_gametypes["lib"] = global/libmef/gametypes.scr::init_gametype
+	}
+
+	waitthread global/libmef/ft.scr::register_gametypes
+	waitthread global/libmef/ctf.scr::register_gametypes
+	waitthread global/libmef/dem.scr::register_gametypes
+end
+
+
+init_gametype:
+	switch (self.gametype)
+	{
+		case "ffa":
+			self.gametypestring = "Free-For-All"
+			self.basegametype = 1
+			break
+		
+		case "tdm":
+			self.gametypestring = "Team-Match"
+			self.basegametype = 2
+			if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+			{
+				waitthread new_cvar_setting "sv_team_spawn_interval"
+			}
+			break
+		
+		case "rbm":
+			self.gametypestring = "Round-Based-Match"
+			self.basegametype = 3
+			thread rbm_begin
+			break
+
+		case "obj":
+			self.gametypestring = "Objective-Match"
+			self.basegametype = 4
+			waitthread global/libmef/util.scr::add_logging_settings
+			break
+
+		case "tow":
+			self.gametypestring = "Tug-of-War"
+			self.basegametype = 5
+			waitthread new_cvar_setting "sv_team_spawn_interval"
+			waitthread global/libmef/util.scr::add_logging_settings
+			break
+
+		case "lib":
+			self.gametypestring = "Liberation"
+			self.basegametype = 6
+			break
+	}
+	
+	waitthread new_cvar_setting "fraglimit"
+	waitthread new_cvar_setting "timelimit"
+
+	if (self.basegametype >= 3)
+	{
+		waitthread new_cvar_setting "roundlimit"
+	}
+end
+
+
+get_gametype:
+	waitthread register_gametypes
+	
+	local.disabled = bool(getcvar "g_mef_disable")
+
+	if (local.disabled)
+	{
+		local.gtype = waitthread read_gametype "none"
+	} else
+	{
+		waitthread check_map_rotation
+
+		local.gtype = waitthread read_gametype (getcvar "g_extgametype")
+
+		if (!(waitthread is_valid_gametype local.gtype[0]))
+		{
+			local.gtype = waitthread read_gametype (getcvar ("g_extgametype_" + level.mef_mapname))
+		}
+
+		if (!(waitthread is_valid_gametype local.gtype[0]))
+		{
+			local.gtypenum = int(getcvar "g_gametype")
+
+			if (local.gtypenum == 3 || local.gtypenum == 4 || local.gtypenum == 5)
+			{
+				local.gtype = waitthread read_gametype level.mef_defaultgametype
+			}
+		}
+		
+		if (!(waitthread is_valid_gametype local.gtype[0]))
+		{
+			local.gtype = waitthread read_gametype "none"
+		}
+	}
+
+	// if no gametype was selected, determine which one it is from the g_gametype cvar
+	if (local.gtype[0] == "none")
+	{
+		local.gtypenum = int(getcvar "g_gametype")
+		if (level.mef_basegtypes[local.gtypenum] != NIL)
+		{
+			local.gtype = waitthread read_gametype level.mef_basegtypes[local.gtypenum]
+		}
+	}
+
+	level.mef_gametype = local.gtype[0]
+
+	if (level.mef_gametypes[level.mef_gametype] != NIL)
+	{
+		level.mef_settingsdef[0] = NIL
+		
+		level.mef_gametypeobj = waitthread create_gametypeobj level.mef_gametype level.mef_gametypes[level.mef_gametype]
+
+		// set the gametype string for the selected gametype
+		setcvar "g_gametypestring" level.mef_gametypeobj.gametypestring
+		
+		if (!local.disabled)
+		{
+			level.mef_basegametype = level.mef_gametypeobj.basegametype
+			setcvar "g_gametype" level.mef_basegametype
+			setcvar "session" level.mef_basegametype
+			waitthread add_base_settings
+			thread any_gametype_thread
+			waitthread compile_settings level.mef_gametype local.gtype[1]
+		}
+	}
+end level.mef_gametype
+
+
+read_gametype local.str:
+	local.result = waitthread global/libmef/util.scr::string_popitem local.str " ,"
+	local.result[0] = waitthread global/libmef/util.scr::string_tolower local.result[0]
+end local.result
+
+
+create_gametypeobj local.gametype local.initthread:
+	local.ent = local createListener
+	local.ent.gametype = local.gametype
+	local.ent waitthread local.initthread
+end local.ent
+
+
+check_map_rotation:
+	local.currentmap = level.mef_fullmapname
+
+	local.lastmap = waitthread global/libmef/util.scr::split_string (getcvar "g_mef_lastmap") " "
+	if (local.lastmap[0] == NIL)
+	{
+		local.lastidx = -1
+	} else
+	{
+		local.lastidx = int(local.lastmap[0])
+	}
+
+	if (local.lastmap[1] == NIL)
+	{
+		local.checknextmap = 0
+	} else
+	{
+		local.checknextmap = bool(local.lastmap[1])
+	}
+	
+	if (local.lastmap[2] == NIL)
+	{
+		local.lastmapname = ""
+	} else
+	{
+		local.lastmapname = local.lastmap[2]
+	}
+
+	local.newmapname = 0
+	if (!(waitthread global/libmef/util.scr::string_equal local.currentmap local.lastmapname level.mef_stringconv["normalizemapname"]))
+	{
+		local.newmapname = 1
+		level.mef_newmap = 1
+	}
+
+	local.nextmap = getcvar "nextmap"
+	if (local.nextmap == "" && local.checknextmap)
+	{
+		local.checknextmap = 0
+		level.mef_newmap = 1
+	}
+	
+	if (local.nextmap == "" || local.newmapname)
+	{
+		local.maplist = waitthread global/libmef/util.scr::split_string (waitthread global/libmef/util.scr::read_chained_cvar "sv_extmaplist" "&" " ") " "
+
+		// start with the last map idx, move forward until we find an entry that matches the current map			
+		local.map = waitthread find_map local.currentmap local.maplist (local.lastidx + 1)
+		if (local.map != NIL)
+		{
+			// found the current map in the rotation
+			local.lastidx = local.map[2]
+
+			// set the current map settings
+			if (local.map[1] != "")
+			{
+				setcvar "g_extgametype" local.map[1]
+			}
+		}
+
+		// find the next valid mapname in the rotation
+		local.nextmap = waitthread find_map NIL local.maplist (local.lastidx + 1)
+		if (local.nextmap != NIL)
+		{
+			// set nextmap to that mapname
+			setcvar "nextmap" local.nextmap[0]
+			local.checknextmap = 1
+		}
+		
+		setcvar "g_mef_lastmap" (local.lastidx + " " + local.checknextmap + " " + local.currentmap)
+	}
+end
+
+
+read_maplist_entry local.entry:
+	if (local.entry[0] == "$")
+	{
+		local.cvarname = ""
+		for (local.i = 1; local.i < local.entry.size; local.i++)
+		{
+			local.cvarname += local.entry[local.i]
+		}
+		
+		if (local.cvarname != "")
+		{
+			local.entry = getcvar local.cvarname
+		} else
+		{
+			local.entry = ""
+		}
+	}
+	
+	local.result = waitthread global/libmef/util.scr::string_popitem local.entry " ,"
+end local.result
+
+
+find_map local.map local.maplist local.idx:
+	if (local.idx < 0 || local.idx >= local.maplist.size)
+	{
+		local.idx = 0
+	}
+	
+	for (local.i = local.idx; local.i < local.maplist.size; local.i++)
+	{
+		local.entry = waitthread read_maplist_entry local.maplist[local.i]
+		if (local.entry[0] != "" && (local.map == NIL || (waitthread global/libmef/util.scr::string_equal local.entry[0] local.map level.mef_stringconv["normalizemapname"])))
+		{
+			local.entry[2] = local.i
+			end local.entry
+		}
+	}
+
+	for (local.i = 0; local.i < local.idx; local.i++)
+	{
+		local.entry = waitthread read_maplist_entry local.maplist[local.i]
+		if (local.entry[0] != "" && (local.map == NIL || (waitthread global/libmef/util.scr::string_equal local.entry[0] local.map level.mef_stringconv["normalizemapname"])))
+		{
+			local.entry[2] = local.i
+			end local.entry
+		}
+	}
+end
+
+
+is_valid_gametype local.gtype:
+	if (local.gtype != "")
+	{
+		if (level.mef_gametypes[local.gtype] != NIL)
+		{
+			end 1
+		} else
+		{
+			waitexec ("global/libmef/gametypes/" + local.gtype + ".scr")
+			if (level.mef_gametypes[local.gtype] != NIL)
+			{
+				end 1
+			} else
+			{
+				println ("ERROR: Unknown gametype \"" + local.gtype + "\"")
+			}
+		}
+	}
+end 0
+
+
+read_gametype_settings:
+	if (level.mef_readgamesettings || level.mef_gametypeobj == NIL)
+	{
+		end
+	}
+	
+	level.mef_readgamesettings = 1
+
+	waitthread read_game_settings level.mef_settings level.mef_settingsdef
+	
+	if (level.mef_gametypeobj.settingsthread != NIL)
+	{
+		waitthread level.mef_gametypeobj.settingsthread
+	}
+end
+
+
+parse_options local.str:
+	local.keylist[0] = NIL
+	local.strlist = waitthread global/libmef/util.scr::split_string local.str " ," 1
+
+	for (local.i = 0; local.i < local.strlist.size; local.i = (local.i + 2))
+	{
+		local.item = local.strlist[local.i]
+		
+		local.key = waitthread global/libmef/util.scr::string_popkey local.item ":"
+		if (local.key != NIL)
+		{
+			local.keylist[local.keylist.size] = local.key
+			local.lastkey = local.key
+		} else
+		{
+			if (local.lastkey != NIL)
+			{
+				if (local.lastkey[1] != "")
+				{
+					local.lastkey[1] += local.strlist[local.i - 1]
+				}
+				local.lastkey[1] += local.item
+			}
+		}
+	}
+end local.keylist
+
+
+append_settings local.settingslu local.cvararray local.settings:
+	for (local.i = 0; local.i < local.settings.size; local.i++)
+	{
+		local.key = waitthread global/libmef/util.scr::string_tolower local.settings[local.i][0]
+		local.value = local.settings[local.i][1]
+		
+		local.cvar = 0
+		if (local.key == "cvar")
+		{
+			// parse the cvar value into key/value pair
+			local.cvar = waitthread global/libmef/util.scr::string_popitem local.settings[local.i][1] " ,"
+			local.key = (waitthread global/libmef/util.scr::string_tolower local.cvar[0])
+			local.value = local.cvar[1]
+			local.cvar = 1
+		}
+
+		if (local.key != "")
+		{
+			local.def = local.settingslu[local.key]
+			if (local.def != NIL)
+			{
+				if (!(local.cvar && !local.def.cvar))
+				{
+					local.def.cvarval = local.value
+				}
+			
+				if (local.def.cvar)
+				{
+					local.cvar = 1
+				}
+			}
+
+			if (local.cvar)
+			{
+				waitthread append_cvar local.cvararray local.key local.value
+			}
+		}
+	}
+end
+
+
+append_cvar local.array local.name local.value:
+	for (local.i = 0; local.i < local.array.size; local.i++)
+	{
+		if (local.array[local.i][0] == local.name)
+		{
+			local.array[local.i][1] = local.value
+			end
+		}
+	}
+
+	local.array[local.i][0] = local.name
+	local.array[local.i][1] = local.value
+end
+
+
+compile_settings local.gametype local.extsettings:
+	local.cvararray[0] = NIL
+	local.settingslu[0] = NIL
+	for (local.i = 0; local.i < level.mef_settingsdef.size; local.i++)
+	{
+		local.def = level.mef_settingsdef[local.i]
+		local.settingslu[local.def.name] = local.def
+	}
+
+	waitthread append_settings local.settingslu local.cvararray (waitthread parse_options (waitthread global/libmef/util.scr::read_chained_cvar "g_mef_settings" "&" " "))
+	waitthread append_settings local.settingslu local.cvararray (waitthread parse_options (waitthread global/libmef/util.scr::read_chained_cvar ("g_" + local.gametype + "_settings") "&" " "))
+	waitthread append_settings local.settingslu local.cvararray (waitthread parse_options local.extsettings)
+
+	if (level.mef_newmap)
+	{
+		for (local.i = 0; local.i < local.cvararray.size; local.i++)
+		{
+			setcvar local.cvararray[local.i][0] local.cvararray[local.i][1]
+		}
+	}
+end
+
+
+read_setting local.settings local.def:
+	local.def.scrval = local.settings[local.def.name]
+
+	if (local.def.cvarval != NIL)
+	{
+		local.def.val = waitthread cast_val local.def.cvarval local.def.type
+	} else if (local.def.scrval != NIL)
+	{
+		local.def.val = local.def.scrval
+	} else
+	{
+		local.def.val = local.def.defval
+	}
+
+	local.settings[local.def.name] = local.def.val
+	
+	if (local.def.type == "options")
+	{
+		waitthread read_options local.settings local.def.val local.def.name local.def.options
+	}
+end
+
+
+read_game_settings local.settings local.settingsdef:
+	for (local.i = 0; local.i < local.settingsdef.size; local.i++)
+	{
+		local.def = local.settingsdef[local.i]
+		if (!local.def.cvar)
+		{
+			waitthread read_setting local.settings local.def
+		}
+	}
+
+	setcvar "g_mef_currentsettings" (waitthread dump_game_settings local.settingsdef)
+end
+
+
+dump_game_settings local.settingsdef:
+	local.str = ""
+	
+	for (local.i = 0; local.i < local.settingsdef.size; local.i++)
+	{
+		local.def = local.settingsdef[local.i]
+
+		if (!local.def.cvar)
+		{
+			if (local.str != "")
+			{
+				local.str += " "
+			}
+			local.str += (local.def.name + ": " + local.def.val)
+		}
+	}
+end local.str
+
+
+cast_val local.val local.type:
+	switch (local.type)
+	{
+		bool:
+			local.result = bool(local.val)
+			break
+		int:
+			local.result = int(local.val)
+			break
+		float:
+			local.result = float(local.val)
+			break
+		string:
+		options:
+			local.result = string(local.val)
+			break
+		default:
+			local.result = local.val
+			break
+	}
+end local.result
+
+
+read_options local.settings local.str local.setting local.options:
+	local.strlist = waitthread global/libmef/util.scr::split_string local.str " ,"
+	
+	for (local.i = 0; local.i < local.options.size; local.i++)
+	{
+		local.option = local.options[local.i]
+		local.exists = 0
+
+		for (local.j = 0; local.j < local.strlist.size; local.j++)
+		{
+			if (waitthread global/libmef/util.scr::string_equal local.option local.strlist[local.j] level.mef_stringconv["tolower"])
+			{
+				local.exists = 1
+				break
+			}
+		}
+		
+		if (local.exists)
+		{
+			local.settings[(local.setting + "_" + local.option)] = 1
+		} else
+		{
+			local.settings[(local.setting + "_" + local.option)] = NIL
+		}
+	}
+end
+
+
+new_setting local.name local.type local.defval local.options:
+	local.ent = local createListener
+	local.ent.name = local.name
+	local.ent.type = local.type
+	local.ent.defval = local.defval
+	if (local.type == "options")
+	{
+		local.ent.options = waitthread global/libmef/util.scr::split_string local.options " "
+	}
+	level.mef_settingsdef[level.mef_settingsdef.size] = local.ent
+end local.ent
+
+
+new_cvar_setting local.name:
+	local.ent = local createListener
+	local.ent.name = local.name
+	local.ent.cvar = 1
+	level.mef_settingsdef[level.mef_settingsdef.size] = local.ent
+end local.ent
+
+
+add_roundbased_settings:
+	waitthread new_cvar_setting "fraglimit"
+	waitthread new_cvar_setting "timelimit"
+	waitthread new_cvar_setting "roundlimit"
+end
+
+
+add_base_settings:
+	waitthread new_setting "mapfix" bool 1
+end
+
+
+any_gametype_thread:
+	if (!level.mef_dontdefinespawns)
+	{
+		waitthread global/libmef/spawn.scr::define_spawns
+	}
+
+	level waittill prespawn
+
+	if (level.mef_devmode)
+	{
+		waitthread global/libmef/spawn.scr::display_spawns
+	}
+
+	waitthread read_gametype_settings
+	
+	if (level.mef_settings["mapfix"])
+	{
+		local.zvals = waitthread global/libmef/util.scr::get_map_floor_vals level.mef_fullmapname
+		if (local.zvals != NIL)
+		{
+			thread global/libmef/spectate.scr::monitor_player_state
+		}
+	}
+
+	level waittill spawn
+	
+	waitthread global/libmef/util.scr::waittill_roundstart
+	
+	if (level.mef_pchudenabled)
+	{
+		waitthread global/libmef/hud.scr::init_playercount_hud level.mef_pchudx level.mef_pchudy
+	}
+
+	if (level.mef_removeturrets && !level.mef_dontremoveturrets)
+	{
+		if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+		{
+			removeclass FixedTurret
+			removeclass PortableTurret
+			removeclass CarryableTurret
+		}
+		removeclass TurretGun
+	}
+
+	if (local.zvals != NIL)
+	{
+		thread global/libmef/util.scr::under_map_thread 0.1 local.zvals[1] local.zvals[2]
+	}
+end
+
+
+rbm_begin:
+	if (level.rbm_running)
+	{
+		end
+	}
+
+	level.rbm_running = 1
+	
+	level waittill prespawn
+	
+	level waittill spawn
+
+	if (!level.mef_norbmthread)
+	{
+		level.dmrespawning = 0
+		level.dmroundlimit = 5
+		level.clockside = kills
+	}
+end

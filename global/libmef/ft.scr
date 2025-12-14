@@ -2,9 +2,9 @@
 ================================================================================
 Server-Side Freeze-Tag Gametype Library
 for Medal Of Honor
-Version 1.2.3 (11/15/04)
+Version 1.3.2 (05/14/05)
 
-Copyright (c) 2003-2004 Mark Follett
+Copyright (c) 2003-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,35 +28,98 @@ SOFTWARE.
 */
 
 
+register_gametypes:
+	level.mef_gametypes["ft"] = global/libmef/ft.scr::init_gametype
+	level.mef_gametypes["ftobj"] = global/libmef/ft.scr::init_gametype
+	level.mef_gametypes["fttow"] = global/libmef/ft.scr::init_gametype
+end
+
+
+init_gametype:
+	switch (self.gametype)
+	{
+		case "ft":
+			self.gametypestring = "Freeze-Tag"
+
+			if (level.mef_maptype == "obj")
+			{
+				self.basegametype = 4
+			} else
+			{
+				self.basegametype = 3
+			}
+			break
+		
+		case "ftobj":
+			self.gametypestring = "Freeze-Tag-Objective"
+			self.basegametype = 4
+			break
+		
+		case "fttow":
+			self.gametypestring = "Freeze-Tag-TOW"
+			self.basegametype = 5
+			break
+	}
+	
+	if (self.gametype != "fttow")
+	{
+		waitthread global/libmef/gametypes.scr::new_setting "suddendeath" int 1
+	}
+
+	waitthread global/libmef/util.scr::add_logging_settings
+
+	waitthread add_freezetag_settings
+	waitthread global/libmef/gametypes.scr::add_roundbased_settings
+	waitthread global/libmef/spectate.scr::add_spectate_settings
+
+	self.settingsthread = global/libmef/ft.scr::process_settings
+	
+	thread ft_begin
+end
+
+
+process_settings:
+	waitthread global/libmef/spectate.scr::process_settings
+end
+
+
 ft_begin:
+	if (level.ft_running)
+	{
+		end
+	}
+
 	level.ft_running = 1
-	level.ft_version = "1.2.3"
-	setcvar "g_ft_version" level.ft_version
+
+	level waittill prespawn
+
+	level.ft_version = "1.3.2"
 
 	waitthread global/libmef/util.scr::read_gametype_settings
+	thread global/libmef/respawn.scr::respawncontrol_thread
 
 	level.mef_pchudenabled = 1
 	level.mef_pchudx = 10
 	level.mef_pchudy = -140
-	level.mef_dmrespawning = 0
+	level.mef_respawnmode = "ft"
 	level.mef_freezemode = 1
-	level.mef_allies.respawn = 0
-	level.mef_allies.freezemode = 1
-	level.mef_axis.respawn = 0
-	level.mef_axis.freezemode = 1
 
 	if (level.mef_gametype == "ftobj")
 	{
-		level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_obj
+		level.mef_checkwinthread = global/libmef/dem.scr::get_winner_obj
+		local.waverespawn = 0
 	} else if (level.mef_gametype == "fttow")
 	{
-		level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_tow
-		level.mef_allies.waverespawn = 1
-		level.mef_axis.waverespawn = 1
+		level.mef_checkwinthread = global/libmef/tow.scr::get_winner_tow
+		local.waverespawn = 1
 	} else
 	{
 		level.mef_checkwinthread = global/libmef/respawn.scr::get_winner_rb
+		local.waverespawn = 0
 	}
+
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_allies level.mef_respawnmode local.waverespawn
+	waitthread global/libmef/respawn.scr::init_respawnmode level.mef_axis level.mef_respawnmode local.waverespawn
 
 	level.mef_credits[0] = "Freeze-Tag MOD"
 	level.mef_credits[1] = ("Version " + level.ft_version)
@@ -67,15 +130,7 @@ ft_begin:
 
 	if (level.mef_gametype == "ft")
 	{
-		if (level.mef_maptype == "obj")
-		{
-			level.mef_basegametype = 4 // Objective-Match
-		} else
-		{
-			level.mef_basegametype = 3 // Round-Based-Match
-		}
-
-		if (level.mef_settings["meltgun"])
+		if (level.mef_settings["meltgun_on"])
 		{
 			setcvar "g_obj_alliedtext1" "Stand next to a frozen"
 			setcvar "g_obj_alliedtext2" "teammate to melt them"
@@ -101,21 +156,9 @@ ft_begin:
 				setcvar "g_obj_axistext3" "by Mefy"
 			}
 		}
-	} else if (level.mef_gametype == "ftobj")
-	{
-		// Freeze-Tag-Objective
-		level.mef_basegametype = 4 // Objective-Match
-	} else
-	{
-		// Freeze-Tag-TOW
-		level.mef_basegametype = 5 // Tug-of-War
 	}
 
-	setcvar "g_gametype" level.mef_basegametype
-
 	waitthread global/libmef/mapdesc.scr::setup_map level.mef_mapname
-
-	level waittill prespawn
 
 	if (level.mef_gametype == "ft")
 	{
@@ -124,10 +167,7 @@ ft_begin:
 	
 	level waittill spawn
 
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 
 	waitthread global/libmef/hud.scr::init_suddendeath_hud
 
@@ -161,31 +201,17 @@ ft_begin:
 end
 
 
-read_game_settings:
-	local.settingsdef[0] = NIL
-	if (level.mef_gametype != "fttow")
-	{
-		local.settingsdef[0] = "suddendeath"::int::1
-	}
-	waitthread append_ft_settingsdef local.settingsdef
-
-	waitthread global/libmef/util.scr::read_game_settings level.mef_settings local.settingsdef
-end
-
-
-append_ft_settingsdef local.settingsdef:
-	local.ft_settingsdef[0] = "melttime"::int::20
-	local.ft_settingsdef[1] = "meltradius"::int::100
-	local.ft_settingsdef[2] = "meltgun"::bool::1
-	local.ft_settingsdef[3] = "ftannounce"::string::"hudmessages frozen melted bodycodes"
-
-	waitthread global/libmef/util.scr::append_arrays local.settingsdef local.ft_settingsdef
+add_freezetag_settings:
+	waitthread global/libmef/gametypes.scr::new_setting "melttime" int 20
+	waitthread global/libmef/gametypes.scr::new_setting "meltradius" int 100
+	waitthread global/libmef/gametypes.scr::new_setting "meltgun" options "on meltvis scanvis" "on meltvis scanvis"
+	waitthread global/libmef/gametypes.scr::new_setting "frozenmsg" options "loc name bodycodes" "loc name force bodycodes"
+	waitthread global/libmef/gametypes.scr::new_setting "meltmsg" options "loc name" "loc name force privmsg"
 end
 
 
 init_ft_respawnmode:
-	waitthread global/libmef/util.scr::read_options level.mef_settings["ftannounce"] "ftannounce" hudmessages::frozen::melted::bodycodes
-
+	level.ft_playerbodylocs[0] = NIL
 	level.ft_meltrate = 0.006
 
 	level.ft_deathanims[0] = "death_fall_to_knees"
@@ -218,7 +244,7 @@ init_ft_respawnmode:
 		level.mef_settings["melttime"] = 1
 	}
 
-	if (level.mef_settings["meltgun"])
+	if (level.mef_settings["meltgun_on"])
 	{
 		thread auto_collision_check
 	}
@@ -279,7 +305,7 @@ create_frozen_body local.player local.origin:
 	local.ent.freezelocabbr = waitthread global/libmef/mapdesc.scr::get_player_position_abbr local.ent.origin
 	waitthread add_body_to_list local.ent
 
-	waitthread announce_body_position local.ent local.player.dmteam "frozen"
+	waitthread public_msg local.player local.ent "frozen"
 
 	local.player.mef_auxdata.frozenbody = local.ent
 	
@@ -595,7 +621,6 @@ end local.result
 remove_frozen_body local.auxdata:
 	if (local.auxdata.frozenbody != NIL)
 	{
-		waitthread add_frozenloc_to_list local.auxdata.frozenbody.origin local.auxdata.frozenbody.team
 		local.auxdata.frozenbody.melttrigger remove
 		waitthread remove_beam_cylinder local.auxdata.frozenbody.beams
 		local.auxdata.frozenbody.beams = NIL
@@ -668,11 +693,23 @@ end
 
 
 melt_player local.player:
-	waitthread announce_body_position local.player.mef_auxdata.frozenbody local.player.dmteam "melted"
+	waitthread public_msg local.player local.player.mef_auxdata.frozenbody "melted" local.player.ft_meltplayer
+	waitthread add_frozenloc_to_list local.player.mef_auxdata.frozenbody.origin local.player.mef_auxdata.frozenbody.team
 	waitthread remove_frozen_body local.player.mef_auxdata
 	local.player.mef_gstate = "GSTATE_ALIVE"
 	local.player.mef_spectator = 0
 	waitthread award_melter_points local.player.ft_meltplayer
+
+	if (level.mef_settings["meltmsg_privmsg"])
+	{
+		waitthread private_meltmsg local.player local.player.ft_meltplayer
+	}
+
+	if (level.mef_settings["logevents"])
+	{
+		waitthread log_melt local.player local.player.ft_meltplayer
+	}
+
 	local.player.ft_meltplayer = NIL
 end
 
@@ -692,11 +729,16 @@ player_entered_game local.player:
 	{
 		if (local.player.mef_team.spawnfrozenbodies)
 		{
-			local.player.ft_spawnfrozenbody = (waitthread pop_frozenloc_from_list local.player.dmteam)
+			local.org = local.player.mef_auxdata.frozenlocs[local.player.dmteam]
+			if (local.org == NIL)
+			{
+				local.org = (waitthread pop_frozenloc_from_list local.player.dmteam)
+			}
+			local.player.ft_spawnfrozenbody = local.org
 		}
 	}
 	
-	if (level.mef_settings["meltgun"])
+	if (level.mef_settings["meltgun_on"])
 	{
 		thread laser_thread local.player
 	}
@@ -741,7 +783,7 @@ end
 get_body_desc local.team:
 	local.result = ""
 
-	if (level.map_enabled && (level.mef_team[local.team].numplayers > 0) && level.mef_settings["ftannounce_bodycodes"])
+	if (level.map_enabled && (level.mef_team[local.team].numplayers > 0) && level.mef_settings["frozenmsg_bodycodes"])
 	{
 		for (local.elem = (waitthread get_first_frozen_body local.team); local.elem != NIL; local.elem = local.elem.nextbody)
 		{
@@ -825,19 +867,62 @@ find_beam_endpoints local.center local.start local.end:
 end local.result
 
 
-announce_body_position local.body local.team local.action:
-	local.teamprefix["allies"] = "Allied"
-	local.teamprefix["axis"] = "Axis"
-
-	if (level.mef_settings["ftannounce_hudmessages"])
+public_msg local.player local.body local.action local.melters:
+	if (local.action == "frozen")
 	{
-		local.str = local.teamprefix[local.team] + " player " + local.action + "."
+		local.prefix = "frozenmsg_"
+	} else
+	{
+		local.prefix = "meltmsg_"
+	}
 	
-		if (level.mef_settings[("ftannounce_" + local.action)])
+	local.showname = level.mef_settings[(local.prefix + "name")]
+	local.showloc = level.mef_settings[(local.prefix + "loc")]
+	local.force = level.mef_settings[(local.prefix + "force")]
+
+	local.melternames = ""
+	if (local.showname)
+	{
+		local.name = waitthread global/libmef/util.scr::get_player_name local.player
+		if (local.name != NIL)
 		{
-			local.str += (waitthread get_body_full_desc local.body)
+			local.name = "(" + local.name + ")"
 		}
+		
+		if (local.melters != NIL)
+		{
+			local.melternames = waitthread get_melter_names local.melters
+		}
+	}
+
+	local.loc = ""
+	if (local.showloc)
+	{
+		local.loc = (waitthread get_body_full_desc local.body)
+	}
 	
+	local.str = (local.player.mef_team.desc + " player ")
+	if (local.name != NIL)
+	{
+		local.str += (local.name + " ")
+	}
+	
+	local.str += local.action
+
+	if (local.action == "melted" && local.melternames != "")
+	{
+		local.str += (" by " + local.melternames)
+	}
+	
+	local.str += "."
+
+	if (local.loc != "")
+	{
+		local.str += local.loc
+	}
+	
+	if (local.name != NIL || local.melternames != "" || local.loc != "" || local.force)
+	{
 		if (local.action == "melted")
 		{
 			iprintln_noloc local.str
@@ -859,6 +944,97 @@ get_body_full_desc local.body:
 end local.desc
 
 
+private_meltmsg local.player local.melters:
+	local.name = waitthread global/libmef/util.scr::get_player_name local.player
+
+	if (local.name != NIL)
+	{
+		for (local.i = 0; local.i < local.melters.size; local.i++)
+		{
+			local.melter = local.melters[local.i]
+			if (local.melter != NULL)
+			{
+				local.melter iprint ("You melted " + local.name)
+			}
+		}
+	}
+
+	local.melternames = waitthread get_melter_names local.melters
+	if (local.melternames != "")
+	{
+		local.player iprint ("Melted by " + local.melternames)
+	}
+end
+
+
+get_melter_names local.melters:
+	local.names = waitthread get_melter_name_list local.melters
+	
+	local.str = ""
+	
+	for (local.i = 0; local.i < (local.names.size - 1); local.i++)
+	{
+		local.str += local.names[local.i]
+		
+		if (local.names.size > 2)
+		{
+			local.str += ", "
+		} else
+		{
+			local.str += " "
+		}
+	}
+
+	if (local.names.size > 1)
+	{
+		local.str += "and "
+	}
+
+	if (local.names.size > 0)
+	{
+		local.str += local.names[(local.names.size - 1)]
+	}
+end local.str
+
+
+log_melt local.player local.melters:
+	local.name = waitthread global/libmef/util.scr::get_player_name local.player
+	if (local.name == NIL)
+	{
+		end
+	}
+
+	local.str = ("MEF MELT " + local.player.dmteam + " " + (waitthread global/libmef/util.scr::escape_string local.name " " "&"))
+
+	local.names = waitthread get_melter_name_list local.melters
+
+	for (local.i = 0; local.i < local.names.size; local.i++)
+	{
+		local.str += (" " + (waitthread global/libmef/util.scr::escape_string local.names[local.i] " " "&"))
+	}
+
+	println local.str
+end
+
+
+get_melter_name_list local.melters:
+	local.names[0] = NIL
+
+	for (local.i = 0; local.i < local.melters.size; local.i++)
+	{
+		local.melter = local.melters[local.i]
+		if (local.melter != NULL)
+		{
+			local.meltername = waitthread global/libmef/util.scr::get_player_name local.melter
+			if (local.meltername != NIL)
+			{
+				local.names[local.names.size] = local.meltername
+			}
+		}
+	}
+end local.names
+
+
 laser_thread local.player:
 	local.tag = "eyes bone"
 	local.beamalpha = 0.7
@@ -866,7 +1042,23 @@ laser_thread local.player:
 	local.team = local.player.dmteam
 	local.bodytarget = "frozenbody_" + local.player.dmteam
 	local.lightrad = 50
+	
+	if (level.mef_settings["meltgun_scanvis"])
+	{
+		local.scanalpha = local.beamalpha
+	} else
+	{
+		local.scanalpha = 0.0
+	}
 
+	if (level.mef_settings["meltgun_meltvis"])
+	{
+		local.meltalpha = local.beamalpha
+	} else
+	{
+		local.meltalpha = 0.0
+	}
+	
 	local.lasercolor = level.ft_frozencolor[local.player.dmteam]
 	local.laserhitcolor = level.ft_meltingcolor[local.player.dmteam]
 	local.lasersound = level.ft_lasersound[local.player.dmteam]
@@ -879,7 +1071,7 @@ laser_thread local.player:
 	local.ent numsegments 1
 	local.ent life 0
 	local.ent color local.lasercolor
-	local.ent alpha local.beamalpha
+	local.ent alpha local.scanalpha
 	
 	local.ent alwaysdraw
 
@@ -962,6 +1154,7 @@ laser_thread local.player:
 
 		if (local.ent.hitbody && !local.hitbody)
 		{
+			local.ent alpha local.meltalpha
 			local.ent color local.laserhitcolor
 			local.ent light local.laserhitcolor[0] local.laserhitcolor[1] local.laserhitcolor[2] (local.lightrad * 2)
 			local.hitbody = 1
@@ -972,6 +1165,7 @@ laser_thread local.player:
 			}
 		} else if (!local.ent.hitbody && local.hitbody)
 		{
+			local.ent alpha local.scanalpha
 			local.ent color local.lasercolor
 			local.ent light local.lasercolor[0] local.lasercolor[1] local.lasercolor[2] (local.lightrad * 2)
 			local.hitbody = 0
@@ -1122,3 +1316,44 @@ pop_frozenloc_from_list local.team:
 		local.result = ( 0.0 0.0 0.0 )
 	}
 end local.result
+
+
+push_playerbodylocs local.bodylocs:
+	level.ft_playerbodylocs[level.ft_playerbodylocs.size] = local.bodylocs
+end
+
+
+pop_playerbodylocs:
+	if (level.ft_playerbodylocs.size > 0)
+	{
+		local.result = level.ft_playerbodylocs[(level.ft_playerbodylocs.size - 1)]
+		level.ft_playerbodylocs[(level.ft_playerbodylocs.size - 1)] = NIL
+	}
+end local.result
+
+
+player_joined_server local.player:
+	local.player.mef_auxdata.frozenlocs = waitthread pop_playerbodylocs
+end
+
+
+player_left_server local.auxdata:
+	waitthread player_left_team local.auxdata
+	waitthread push_playerbodylocs local.auxdata.frozenlocs
+end
+
+
+player_left_team local.auxdata:
+	if (local.auxdata.lastteam == "allies" || local.auxdata.lastteam == "axis")
+	{
+		if (local.auxdata.frozenbody != NIL)
+		{
+			local.auxdata.frozenlocs[local.auxdata.lastteam] = local.auxdata.frozenbody.origin
+		} else if (local.auxdata.lastorigin != NIL)
+		{
+			local.auxdata.frozenlocs[local.auxdata.lastteam] = local.auxdata.lastorigin
+		}
+	}
+
+	waitthread remove_frozen_body local.auxdata
+end

@@ -3,7 +3,7 @@
 // SCRIPTING: POWZER
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,35 +23,19 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm7"
 
-	level.mef_mapname = "mohdm7"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread global/libmef/spawn.scr::spawnblock_begin
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread global/libmef/spawn.scr::spawnblock_begin
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
 			break
 
 		case "ft":
-			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread global/libmef/ft.scr::ft_begin
-			break
-
 		case "rbm":
 			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread roundbasedthread
 			break
 	}
 
@@ -65,39 +49,25 @@ setcvar "g_scoreboardpic" "mohdm7"
 		exec global/ambient.scr mohdm7
 	
 	level waittill spawn
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 	
 end
 
 //-----------------------------------------------------------------------------
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-		// set the parameters for this round based match
-		level.dmrespawning = 0 // 1 or 0
-		level.dmroundlimit = 5 // round time limit in minutes
-		level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
 
 
 setup_bases:
 	if (level.mef_alliedspawnregion == "north")
 	{
 		// common bases for dem and ctf
-		waitthread global/libmef/bases.scr::addbasepair "925 -1224 -287.88 90 Allied Cable Spool" "-2944 2512 64.13 90 V2 Rocket" cablespool v2rocket
-		waitthread global/libmef/bases.scr::addbasepair "1488 -1220 24.13 90 Allied Bunker Stove" "-2935 2520 284.13 90 V2 Gantry Crane" bunkerstove crane
-		waitthread global/libmef/bases.scr::addbasepair "182 1624 -135.88 90 Allied Barracks" "-2064 729 0.13 180 Axis Barracks" bunkbed bunkbed
-		waitthread global/libmef/bases.scr::addbasepair "-140 -592 -199.88 90 Allied Lockers" "-1500 953 -103 180 Axis Files" lockers bigfilecab
-		waitthread global/libmef/bases.scr::addbasepair "-1135 -639 -228.75 -135 Allied Wicker Basket" "-743 2510 -117.00 -135 Axis Ceramic Pot" wickerbasket ceramicpot
+		waitthread global/libmef/bases.scr::addbasepair "925 -1224 -287.88 90 NE: Cable Spool" "-2944 2512 64.13 90 SW: V2 Rocket" cablespool v2rocket
+		waitthread global/libmef/bases.scr::addbasepair "1488 -1220 24.13 90 NE: Bunker Stove" "-2935 2520 284.13 90 SW: V2 Gantry Crane" bunkerstove crane
+		waitthread global/libmef/bases.scr::addbasepair "415 1745 -135.88 0 NW: Allied Barracks" "-2035 967 0.13 180 S: Mosque Prayer Room" bunkbed bunkbed
+		waitthread global/libmef/bases.scr::addbasepair "-140 -592 -199.88 90 CNE: Allied Lockers" "-1500 953 -103 180 CSW: Axis Files" lockers bigfilecab
+		waitthread global/libmef/bases.scr::addbasepair "-1135 -639 -228.75 -135 E: Wicker Basket" "-743 2510 -117.00 -135 W: Ceramic Pot" wickerbasket ceramicpot
 
 		// additional bases for ctf only
 		if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
@@ -107,12 +77,12 @@ setup_bases:
 	} else
 	{
 		// common bases for dem and ctf
-		waitthread global/libmef/bases.scr::addbasepair "-2176 949 284.13 90 Radar Dish" "757 -31 -151.88 -45 V2 Rocket" radardish v2rocket
-		waitthread global/libmef/bases.scr::addbasepair "-3120 1314 314.13 -90 Allied Radio" "757 -31 -151.88 180 V2 Gantry Crane" radiostation crane
-		waitthread global/libmef/bases.scr::addbasepair "-2064 729 0.13 180 Allied Barracks" "182 1624 -135.88 90 Axis Barracks" bunkbed bunkbed
-		waitthread global/libmef/bases.scr::addbasepair "-1500 953 -103 180 Allied Files" "-140 -592 -199.88 90 Axis Lockers" bigfilecab lockers
-		waitthread global/libmef/bases.scr::addbasepair "-743 2510 -117.00 -135 Allied Ceramic Pot" "-1135 -639 -228.75 -135 Axis Wicker Basket" ceramicpot wickerbasket
-
+		waitthread global/libmef/bases.scr::addbasepair "-2176 949 284.13 90 S: Radar Dish" "757 -31 -151.88 -45 N: V2 Rocket" radardish v2rocket
+		waitthread global/libmef/bases.scr::addbasepair "-3120 1314 314.13 -90 S: Mosque Radio Room" "757 -31 -151.88 180 N: V2 Gantry Crane" radiostation crane
+		waitthread global/libmef/bases.scr::addbasepair "-2035 967 0.13 180 S: Mosque Prayer Room" "415 1745 -135.88 0 NW: Axis Barracks" bunkbed bunkbed
+		waitthread global/libmef/bases.scr::addbasepair "-1500 953 -103 180 CSW: Allied Files" "-140 -592 -199.88 90 CNE: Axis Lockers" bigfilecab lockers
+		waitthread global/libmef/bases.scr::addbasepair "-743 2510 -117.00 -135 W: Ceramic Pot" "-1135 -639 -228.75 -135 E: Wicker Basket" ceramicpot wickerbasket
+		
 		// additional bases for ctf only
 		if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
 		{

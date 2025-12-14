@@ -1,12 +1,12 @@
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.0 (07-22-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
 // You are free to modify and redistribute as long as you keep these
 // credits.
 // **********************************************************************
-// Credits to Kaotik for CTF base positions
+// Credits to Kaotik for base positions
 
 main:
 
@@ -23,27 +23,13 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mp_verschneit_dm.tga"
 
-	level.mef_mapname = "mp_verschneit_dm"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			// CTF Base positions by Kaotik
-			waitthread global/libmef/bases.scr::addbasepair "-3392.87 -1215.48 8.13 0 SW Sector" "-1027.89 -1311.13 -127.88 -90 Under W Bridge"
-			waitthread global/libmef/bases.scr::addbasepair "-2356.75 372.87 8.13 -90 W Sector" "-82.40 -2815.13 -287.88 -90 N Central Gutter"
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
 			break
 	}
 		
@@ -66,21 +52,11 @@ setcvar "g_scoreboardpic" "mp_verschneit_dm.tga"
 end
 
 
-//-----------------------------------------------------------------------------
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-	
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-//	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-3392.87 -1215.48 8.13 0 SW Sector" "-1027.89 -1311.13 -127.88 -90 Under W Bridge"
+	waitthread global/libmef/bases.scr::addbasepair "-2356.75 372.87 8.13 -90 W Sector" "-82.40 -2815.13 -287.88 -90 N Central Gutter"
 end
 
+
+//-----------------------------------------------------------------------------

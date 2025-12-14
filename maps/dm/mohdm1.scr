@@ -3,7 +3,7 @@
 // SCRIPTING: POWZER
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -23,35 +23,19 @@ setcvar "g_obj_axistext3" ""
 
 setcvar "g_scoreboardpic" "mohdm1"
 
-	level.mef_mapname = "mohdm1"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"ft"::"ctf"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ft"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread global/libmef/spawn.scr::spawnblock_begin
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread global/libmef/spawn.scr::spawnblock_begin
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
 			break
 
 		case "ft":
-			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread global/libmef/ft.scr::ft_begin
-			break
-
 		case "rbm":
 			waitthread global/libmef/spawn.scr::spawnblock_begin
-			thread roundbasedthread
 			break
 	}
 
@@ -71,39 +55,25 @@ setcvar "g_scoreboardpic" "mohdm1"
 
 	level waittill spawn
 
-	$world farclipoverride -1
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
+	{
+		$world commanddelay 0 farclipoverride -1
+	}
 
 end
 
 //-----------------------------------------------------------------------------
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
-end
 
 
 setup_bases:
 	if (level.mef_alliedspawnregion == "east")
 	{
 		// common bases for dem and ctf
-		waitthread global/libmef/bases.scr::addbasepair "-750 630 -15.88 0 Allied Wine Cellar" "1043 2085 512.13 0 Axis Files" winecasks smallfilecab
-		waitthread global/libmef/bases.scr::addbasepair "-1502 797 220.13 -45 Allied Typewriter" "1237 2631 672.13 180 Axis Trunk" typewriter trunk
-		waitthread global/libmef/bases.scr::addbasepair "-189 1275 95.13 -45 Allied Beef" "1121 1504 432.17 -90 Axis Sausage" beef sausage
-		waitthread global/libmef/bases.scr::addbasepair "1105 277 304.13 0 Allied Flour Bag" "-447 2320 384.19 -90 Axis Nebelwerfer" flourbag nebelwerfer
-		waitthread global/libmef/bases.scr::addbasepair "324 -200 48.13 -150 Allied Flak Cannon"  "820 2385 384.13 180 Axis Picnic Table" 20mmflak umbrellatable
+		waitthread global/libmef/bases.scr::addbasepair "-750 630 -15.88 0 SE: Wine Cellar" "1043 2085 512.13 0 NW: Files" winecasks smallfilecab
+		waitthread global/libmef/bases.scr::addbasepair "-1502 797 220.13 -45 SE: Typewriter" "1237 2631 672.13 180 NW: Trunk" typewriter trunk
+		waitthread global/libmef/bases.scr::addbasepair "-189 1275 95.13 -45 C: Beef" "1121 1504 432.17 -90 C: Sausage" beef sausage
+		waitthread global/libmef/bases.scr::addbasepair "1105 277 304.13 0 NE: Flour Bag" "-447 2320 384.19 -90 SW: Nebelwerfer" flourbag nebelwerfer
+		waitthread global/libmef/bases.scr::addbasepair "324 -200 48.13 -150 E: Flak Cannon"  "820 2385 384.13 180 W: Picnic Table" 20mmflak umbrellatable
 
 		// additional bases for ctf only
 		if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
@@ -113,11 +83,11 @@ setup_bases:
 	} else
 	{
 		// common bases for dem and ctf
-		waitthread global/libmef/bases.scr::addbasepair "1105 1941 512.13 90 Allied Files" "-750 630 -15.88 0 Axis Wine Cellar" smallfilecab winecasks
-		waitthread global/libmef/bases.scr::addbasepair "1237 2631 672.13 180 Allied Trunk" "-1502 797 220.13 -45 Axis Typewriter" trunk typewriter
-		waitthread global/libmef/bases.scr::addbasepair "1121 1504 432.17 -90 Allied Sausage" "-189 1275 95.13 -45 Axis Beef" sausage beef
-		waitthread global/libmef/bases.scr::addbasepair "-447 2320 384.19 -90 Allied Nebelwerfer" "1105 277 304.13 0 Axis Flour Bag" nebelwerfer flourbag
-		waitthread global/libmef/bases.scr::addbasepair "820 2385 384.13 180 Allied Picnic Table" "324 -200 48.13 -150 Axis Flak Cannon" umbrellatable 20mmflak
+		waitthread global/libmef/bases.scr::addbasepair "1105 1941 512.13 90 NW: Files" "-750 630 -15.88 0 SE: Wine Cellar" smallfilecab winecasks
+		waitthread global/libmef/bases.scr::addbasepair "1237 2631 672.13 180 NW: Trunk" "-1502 797 220.13 -45 SE: Typewriter" trunk typewriter
+		waitthread global/libmef/bases.scr::addbasepair "1121 1504 432.17 -90 C: Sausage" "-189 1275 95.13 -45 C: Beef" sausage beef
+		waitthread global/libmef/bases.scr::addbasepair "-447 2320 384.19 -90 SW: Nebelwerfer" "1105 277 304.13 0 NE: Flour Bag" nebelwerfer flourbag
+		waitthread global/libmef/bases.scr::addbasepair "820 2385 384.13 180 W: Picnic Table" "324 -200 48.13 -150 E: Flak Cannon" umbrellatable 20mmflak
 
 		// additional bases for ctf only
 		if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")

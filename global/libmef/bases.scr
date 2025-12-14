@@ -2,9 +2,9 @@
 ================================================================================
 Base Selection Library
 for Medal Of Honor
-Version 1.2.2 (11/15/04)
+Version 1.2.4 (04/09/05)
 
-Copyright (c) 2004 Mark Follett
+Copyright (c) 2004-2005 Mark Follett
 email: mef123@geocities.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -267,7 +267,8 @@ end local.result
 
 
 new_base local.bdata local.team:
-	local.base = waitthread global/libmef/util.scr::read_position_string local.bdata["pos"]
+	local.base = spawn script_origin
+	waitthread global/libmef/util.scr::read_position_string local.bdata["pos"] local.base
 	local.base.team = local.team
 
 	if (local.bdata["type"] != NIL)
@@ -355,10 +356,7 @@ spawn_bases local.bases:
 	{
 		level waittill spawn
 
-		if (!level.mef_devmode)
-		{
-			level waittill roundstart
-		}
+		waitthread global/libmef/util.scr::waittill_roundstart
 	}
 	
 	if (local.bases["allies"] != NIL)
@@ -760,11 +758,7 @@ spawn_winecask local.base:
 	if (!level.mef_setbases)
 	{
 		level waittill spawn
-	
-		if (!level.mef_devmode)
-		{
-			level waittill roundstart
-		}
+		waitthread global/libmef/util.scr::waittill_roundstart
 	}
 
 	wait 0.5

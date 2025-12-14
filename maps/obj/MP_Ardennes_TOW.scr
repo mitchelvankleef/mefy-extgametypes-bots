@@ -5,14 +5,14 @@
 // 2 = Neutral
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (08-15-04)
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
 // You are free to modify and redistribute as long as you keep these
 // credits.
 // **********************************************************************
-// Credits to Kaotik for CTF base positions
+// Credits to Kaotik for base positions
 
 //----------------------------------------------------------
 // Main
@@ -28,35 +28,17 @@ main:
 
 	setcvar "g_scoreboardpic" "mp_ardennes_tow" 
 
-	level.mef_mapname = "mp_ardennes_tow"
-	level.mef_maptype = "dm"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"tow"::"ft"::"ctf"::"ftctf"::"fttow"
-	level.mef_defaultgametype = "fttow"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			// CTF Base positions by Kaotik
-			waitthread global/libmef/bases.scr::addbasepair "-666 648.87 -31.88 -90 South Gate" "3412.87 351.55 372.48 180 Fort"
-			waitthread global/libmef/bases.scr::addbasepair "-2598 -3054.7 23.41 45 SE Logpile" "1239.62 1456.87 168.13 -90 2nd Floor NW House"
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "rbm":
-			thread roundbasedthread
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
 			break
 
 		case "tow":
-			thread towthread
-			break
-
 		case "fttow":
-			thread global/libmef/ft.scr::ft_begin
 			thread towthread
 			break
 	}
@@ -119,21 +101,10 @@ main:
 end
 
 
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-666 648.87 -31.88 -90 South Gate" "3412.87 351.55 372.48 180 Fort"
+	waitthread global/libmef/bases.scr::addbasepair "-2598 -3054.7 23.41 45 SE Logpile" "1239.62 1456.87 168.13 -90 2nd Floor NW House"
 end
 
 
@@ -181,10 +152,7 @@ towthread:
 	level.fire_attack_thread	= NIL
 
 	//////////////////////////
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 	//////////////////////////
 
 	//initialize the switches and bombs.

@@ -1,0 +1,1075 @@
+// MP_MonteBattaglia_TOW
+//
+// Map design:
+// Scripting: Jason Abbott
+
+//1 4   n obj_allied_spawner	trigger_allies_bomb
+//		just_triggered_allies_bomb
+//2 1 2 + obj_V2_lift		trigger_V2_lift		toggle_V2_lift
+//		V2_lift
+//3 2 3 n obj_V2_launcher	trigger_V2_launcher	trigger_V2_launcher
+//		V2_launcher
+//4 3 1 x obj_radio_tower	trigger_radio_tower	toggle_radio_tower
+//		radio_tower
+//5   3 n obj_axis_spawner	trigger_axis_bomb
+//		just_triggered_axis_bomb
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+//----------------------------------------------------------
+// Main
+//----------------------------------------------------------
+main:
+	// set scoreboard messages
+	setcvar "g_obj_alliedtext1" "Monte Battaglia" 
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+
+	setcvar "g_scoreboardpic" "MP_MonteBattaglia_TOW" 
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "tow":
+		case "fttow":
+			thread towthread
+			break
+	}
+
+	level.script="maps/obj/MP_MonteBattaglia_TOW.scr"
+	level.music="MP_MonteBattaglia"
+
+	//Exec our helper scripts
+	exec global/exploder.scr
+	exec global/ambient.scr
+	
+	level waittill prespawn
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		//remove all ai
+		$enemyspawner remove
+
+		//This will remove the bombs so that we can play in other modes...
+		$just_triggered_allies_bomb remove
+		$just_triggered_axis_bomb remove
+	}
+
+	level waittill spawn
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	thread init_V2_lift
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "816.87 -1310.59 1600.13 180 2nd Level NE" "-1060 1644 1952.13 0 3rd Level SW"
+	waitthread global/libmef/bases.scr::addbasepair "768.87 458.38 1600.13 180 2nd Level NW" "-1441 278.33 2160.13 0 4th Level S"
+end
+
+
+towthread:
+	level.bRoundStarted = 0
+
+	exec global/tow_dm.scr
+	exec global/dm_ai.scr
+
+	setcvar "g_obj_alliedtext1" ( loc_convert_string "Protect the Entrance" )
+	setcvar "g_obj_alliedtext2" ( loc_convert_string "Keep the lift lowered" )
+	setcvar "g_obj_alliedtext3" ( loc_convert_string "Keep the radio silent" )
+	setcvar "g_obj_alliedtext4" ( loc_convert_string "Destroy the Axis camp" )
+	setcvar "g_obj_alliedtext5" ( loc_convert_string "Stop the V2 from launching" )
+
+	setcvar "g_obj_axistext1" ( loc_convert_string "Protect the Camp" )
+	setcvar "g_obj_axistext2" ( loc_convert_string "Engage the radio" )
+	setcvar "g_obj_axistext3" ( loc_convert_string "Raise the V2" )
+	setcvar "g_obj_axistext4" ( loc_convert_string "Launch the V2" )
+	setcvar "g_obj_axistext5" ( loc_convert_string "Destroy the Allies Entrance" )
+
+	level waittill prespawn
+
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_allied_spawner 1 5 1
+	waitthread global/libmef/tow.scr::copy_towobjective $obj_axis_spawner 4 1 5
+
+	level waittill spawn
+
+	$enemyspawner hide
+	$enemyspawner notsolid
+
+	level.dmroundlimit	= 5	 // round time limit in minutes
+	level.clockside		= allies // set to axis, allies, kills, or draw
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	level.bRoundStarted = 1
+
+	waitthread init_objectives
+	thread init_spawner_bombs
+
+	thread init_radio_tower
+	thread init_V2_launcher
+end
+
+
+//----------------------------------------------------------
+//Initialize the objective entities
+//----------------------------------------------------------
+init_objectives:
+
+	$obj_axis_spawner ControlledBy 0
+	$obj_radio_tower ControlledBy 0
+	$obj_V2_launcher ControlledBy 1
+	$obj_V2_lift ControlledBy 1
+	$obj_allied_spawner ControlledBy 1
+
+	$obj_axis_spawner initialize
+	$obj_radio_tower initialize
+	$obj_V2_launcher initialize
+	$obj_V2_lift initialize
+	$obj_allied_spawner initialize
+
+	$obj_V2_lift SetCurrent 1
+	$obj_radio_tower SetCurrent 0
+
+	thread set_objectives
+end
+
+//----------------------------------------------------------
+//Set the teams current objectives
+//----------------------------------------------------------
+set_objectives:
+	if( $obj_V2_launcher.ControlledBy == 0 )
+		end
+	
+	//First lets do the allies
+	if( $obj_V2_lift.ControlledBy != 1 )
+	{	
+		iprintln ( loc_convert_string "Allies -- lower the V2!" )
+		$obj_V2_lift SetCurrent 1
+	}	
+	else if( $obj_radio_tower.ControlledBy != 1 )
+	{	
+		iprintln ( loc_convert_string "Allies -- Turn off the radio!" )
+		$obj_radio_tower SetCurrent 1
+	}
+	else if( $obj_axis_spawner.ControlledBy != 1 )
+	{
+		iprintln ( loc_convert_string "Allies -- Blow up the axis spawn!" )
+		$obj_axis_spawner SetCurrent 1
+	}
+
+	//Now the Axis	
+	if( $obj_radio_tower.ControlledBy != 0 )
+	{
+		iprintln ( loc_convert_string "Axis -- Turn on the radio!" )
+		$obj_radio_tower SetCurrent 0
+	}
+	else if( $obj_V2_lift.ControlledBy != 0 )
+	{	
+		iprintln ( loc_convert_string "Axis -- Raise the V2!" )
+		$obj_V2_lift SetCurrent 0
+	}	
+	else if( $obj_V2_launcher.ControlledBy != 0 )
+	{
+		iprintln ( loc_convert_string "Axis -- Launch the V2!" )
+		$obj_V2_launcher SetCurrent 0
+	}
+
+end
+
+//-----------------------------------------------
+// See if someone won
+//-----------------------------------------------
+Check_End_Match:
+
+	local.nAllies = 0
+
+	if ($obj_V2_lift.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if ($obj_radio_tower.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if ($obj_axis_spawner.ControlledBy == 1)
+	{
+		local.nAllies++
+	}
+
+	if( local.nAllies == 3 )
+	{
+		//If the clock expires during the movie ignore it
+		level ignoreclock 1
+		level.mef_gameover = 1
+
+		//if there is a bomb ticking stop it.
+		waitthread global/libmef/bomb.scr::StopBomb
+
+		//Play the cinematic
+		thread AlliesWon
+	}
+
+	if( $obj_V2_launcher.ControlledBy == 0 )
+	{
+		//If the clock expires during the movie ignore it
+		level ignoreclock 1
+		level.mef_gameover = 1
+
+		//if there is a bomb ticking stop it.
+		waitthread global/libmef/bomb.scr::StopBomb
+
+		//Play the cinematic
+		thread AxisWon
+	}
+
+end
+
+//-----------------------------------------------
+// Init the spawner bombs
+//-----------------------------------------------
+init_spawner_bombs:
+
+	//Allied spawner bomb
+	$just_triggered_allies_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "axis" maps/obj/MP_MonteBattaglia_TOW.scr::destroy_allies_spawner
+
+	//Axis spawner bomb
+	$just_triggered_axis_bomb thread global/libmef/bomb.scr::tow_bomb_thinker "allies" maps/obj/MP_MonteBattaglia_TOW.scr::destroy_axis_spawner
+
+end
+
+//----------------------------------------------------------
+// V2 Lift controls
+//
+// Annoyingly enough, the lift has to work in both TOW games
+// and non TOW game... and, of course, it's not an objective
+// in non TOW games, so we can't rely on that there.
+//----------------------------------------------------------
+
+init_V2_lift:
+	$V2_lift.isUp = 0
+	$V2_lift.isLiftUp = 0	// non-TOW only flag
+
+	thread damagePlayerOnRocket
+
+	local.soundmaker = spawn "animate/military_radio.tik" "origin" $V2_lift.origin "scale" "0.01" "targetname" "V2_soundbox"
+	local.soundmaker rendereffects "+dontdraw"
+	local.soundmaker bind $V2_lift_brushes
+	local.soundmaker thread playV2LiftSound
+end
+
+raiseV2LiftLever:
+	if ($V2_lift.isUp != 0)
+		end
+
+	$V2_lift playsound Battaglia_lever
+
+	$V2_lift.isUp = 2
+	
+	$V2_lift notsolid
+	$V2_lift time 3.0
+	$V2_lift rotatexdown 30
+	$V2_lift waitmove
+
+	$V2_lift.isUp = 1
+
+	$V2_lift playsound switchbox
+	$V2_lift safesolid
+end
+
+lowerV2LiftLever:
+	if ($V2_lift.isUp != 1)
+		end
+
+	$V2_lift playsound Battaglia_lever
+
+	$V2_lift.isUp = 2
+	
+	$V2_lift notsolid
+	$V2_lift time 3.0
+	$V2_lift rotatexup 30
+	$V2_lift waitmove
+
+	$V2_lift.isUp = 0
+
+	$V2_lift playsound switchbox
+	$V2_lift safesolid
+end
+
+playV2LiftSound:
+	while (self.playsound != 1)
+		wait 0.1
+
+	while (self)
+	{
+		self playsound Battaglia_elevator_start
+		wait 1.0 // can't do a waittill sounddone in Multiplayer
+		self loopsound Battaglia_elevator_run
+		while (self.playsound == 1)
+			wait 0.1
+		self stoploopsound
+		self playsound Battaglia_elevator_stop
+		while (self.playsound != 1)
+			wait 0.1
+	}
+end
+
+snapV2LiftToGround:
+	$V2_lift bind $V2_lift_brushes
+	$V2_rocket glue $V2_lift_brushes
+
+	$V2_lift notsolid
+	$V2_rocket notsolid
+	$V2_lift_brushes notsolid
+
+	$V2_lift_brushes time 0.5
+	$V2_lift_brushes movedown 1264
+	$V2_lift_brushes waitmove
+
+	$V2_lift unbind
+	$V2_rocket unglue
+end
+
+moveLiftUp:
+	thread raiseV2LiftLever
+
+	while ($V2_lift.isUp != 1)
+		wait 0.1
+
+	$V2_soundbox.playsound = 1
+
+	$V2_lift bind $V2_lift_brushes
+	$V2_rocket glue $V2_lift_brushes
+
+	$wheels_cw rotatex 30.0
+	$wheels_ccw rotatex -30.0
+
+	$V2_lift_brushes time 20.0
+	$V2_lift_brushes moveup 1264
+	$V2_lift_brushes waitmove
+
+	$V2_lift unbind
+	$V2_rocket unglue
+
+	self.origin = self.origin + ( 0 0 1264 )
+
+	$wheels_cw rotatex 0.0
+	$wheels_ccw rotatex 0.0
+
+	$V2_soundbox.playsound = 0
+end
+
+moveLiftDown:
+	thread lowerV2LiftLever
+
+	while ($V2_lift.isUp != 0)
+		wait 0.1
+
+	$V2_soundbox.playsound = 1
+
+	$V2_lift bind $V2_lift_brushes
+	$V2_rocket glue $V2_lift_brushes
+
+	$wheels_cw rotatex -30.0
+	$wheels_ccw rotatex 30.0
+
+	$V2_lift_brushes time 20.0
+	$V2_lift_brushes movedown 1264
+	$V2_lift_brushes waitmove
+
+	$V2_lift unbind
+	$V2_rocket unglue
+
+	self.origin = self.origin + ( 0 0 -1264 )
+
+	$wheels_cw rotatex 0.0
+	$wheels_ccw rotatex 0.0
+
+	$V2_soundbox.playsound = 0
+end
+
+toggle_V2_lift_FFA:
+	if( $V2_lift.isUp == 2 )
+		end
+	if( $V2_lift.isLiftUp == 2 )
+		end
+
+	if( $V2_lift.isLiftUp == 0 )
+	{
+		$V2_lift.isLiftUp = 2
+
+		waitthread moveLiftUp
+
+		$V2_lift.isLiftUp = 1
+	}
+	else if( $V2_lift.isLiftUp == 1 )
+	{
+		$V2_lift.isLiftUp = 2
+
+		waitthread moveLiftDown
+
+		$V2_lift.isLiftUp = 0
+	}
+end
+
+toggle_V2_lift local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (level.mef_gametype != "tow" && level.mef_gametype != "fttow")
+	{
+		thread toggle_V2_lift_FFA
+		end
+	}
+
+	if (!level.bRoundStarted)
+		end
+
+	if ($V2_lift.isUp == 2)
+		end
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		if( $obj_V2_lift.ControlledBy == 1 )
+		{
+			$obj_V2_lift ControlledBy 2
+
+			waitthread moveLiftUp
+
+			$obj_V2_lift TakeOver 0
+			waitthread global/libmef/tow.scr::objective_captured axis
+			iprintln ( loc_convert_string "The Axis have raised the V2!" )
+			thread set_objectives
+			waitthread Check_End_Match
+
+		}
+	}
+	else if( local.switcher.dmteam == "allies" )
+	{
+		if( $obj_V2_lift.ControlledBy == 0 )
+		{
+			$obj_V2_lift ControlledBy 2
+
+			waitthread moveLiftDown
+
+			$obj_V2_lift TakeOver 1
+			waitthread global/libmef/tow.scr::objective_captured allies
+			iprintln ( loc_convert_string "The Allies have lowered the V2!" )
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+end
+
+damagePlayerOnRocket:
+	// Pesky players that play with hot rockets get burned
+	$V2_kill remove
+	while ($V2_rocket)
+	{
+		for (local.i = 1; local.i<= $player.size; local.i++)
+		{
+			if ($player[local.i] istouching $V2_rocket)
+				$player[local.i] damage $world 1 $world (0 0 0) (0 0 0) (0 0 0) 0 9 0 0
+		}
+		wait 0.1
+	}
+end
+
+//----------------------------------------------------------
+// Radio Tower Controls
+//----------------------------------------------------------
+
+init_radio_tower:
+	$radio_tower.isOn = 1
+	$radio_tower.on_origin = $radio_tower.origin
+	$radio_tower.off_origin = $radio_tower.origin + ( 0 0 -15 )
+
+	if( $obj_radio_tower.ControlledBy == 1 )
+		thread turnRadioOff
+end
+
+toggle_radio_tower local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (!level.bRoundStarted) 
+	{
+		end
+	}
+
+	if( $radio_tower.isOn == 2)
+		end
+
+	if( local.switcher.dmteam == "axis" )
+	{
+		if( $obj_radio_tower.ControlledBy != 0 )
+		{
+			thread turnRadioOn
+
+			$obj_radio_tower TakeOver 0
+			waitthread global/libmef/tow.scr::objective_captured axis
+			iprintln ( loc_convert_string "The Axis have turned on the radio!" )
+
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+	else if( local.switcher.dmteam == "allies" )
+	{
+		if( $obj_radio_tower.ControlledBy != 1 )
+		{
+			thread turnRadioOff
+
+			$obj_radio_tower TakeOver 1
+			waitthread global/libmef/tow.scr::objective_captured allies
+			iprintln ( loc_convert_string "The Allies have turned off the radio!" )
+
+			thread set_objectives
+			waitthread Check_End_Match
+		}
+	}
+end
+
+turnRadioOn:
+	$radio_tower.isOn = 2
+
+	$radio_tower notsolid
+	$radio_tower speed 10
+	$radio_tower moveto $radio_tower.on_origin
+	$radio_tower solid
+	$radio_tower waitmove
+	$radio_tower playsound switchbox
+
+	$radio_tower.isOn = 1
+end
+
+turnRadioOff:
+	$radio_tower.isOn = 2
+
+	$radio_tower notsolid
+	$radio_tower speed 10
+	$radio_tower moveto $radio_tower.off_origin
+	$radio_tower solid
+	$radio_tower waitmove
+	$radio_tower playsound switchbox
+
+	$radio_tower.isOn = 0
+end
+
+//----------------------------------------------------------
+// V2 Launcher Controls
+//----------------------------------------------------------
+
+init_V2_launcher:
+	$V2_launcher.primed = 0
+	$V2_launcher.start_origin = $V2_launcher.origin
+	$V2_launcher.end_origin = $V2_launcher.origin + ( 15 0 0 )
+	$V2_alarm thread V2AlarmLoop
+end
+
+toggle_V2_launcher local.switcher:
+	if (local.switcher.mef_spectator)
+	{
+		end
+	}
+
+	if (!level.bRoundStarted) 
+	{
+		end
+	}
+
+	if ( $V2_launcher.primed == 1 ) {
+		local.switcher iprint ( loc_convert_string "Someone else is launching the V2!" )
+		end
+	}
+
+	if ( $V2_launcher.primed == 2 )
+		end
+
+	if ( local.switcher.dmteam == "allies" ) {
+		local.switcher iprint ( loc_convert_string "What are you thinking? The Axis are trying to launch this V2!" )
+		end
+	}
+
+	if ( $obj_radio_tower.ControlledBy != 0 ) {
+		local.switcher iprint ( loc_convert_string "V2 can't be launched without a working radio!" )
+		end
+	}
+
+	if ( $obj_V2_lift.ControlledBy == 2 ) {
+		local.switcher iprint ( loc_convert_string "The V2 is currently being raised... please wait..." )
+		end
+	}
+
+	if ( $obj_V2_lift.ControlledBy != 0 ) {
+		local.switcher iprint ( loc_convert_string "V2 can't be fired from a lowered position!" )
+		end
+	}
+
+	thread attempt_launch local.switcher
+end
+
+attempt_launch local.switcher:
+
+	local.waitSize = 150	/* 15 seconds */
+	local.count = local.waitSize
+
+	local.switcher.mef_pressingbutton = 1
+
+	while (local.switcher != NULL) {
+
+		if ( $V2_launcher.primed == 0 )
+			thread primeV2LaunchLever
+
+		if ( ! ( Isalive local.switcher ) )
+			break
+
+		if ( local.switcher.dmteam != "axis" )
+			break		/* What? Player switched team? */
+
+		if ( local.switcher.useheld == 0 )
+			break
+
+		if ( ! ( local.switcher cansee $V2_launcher 180 80 ) )
+			break
+
+		if ( $obj_radio_tower.ControlledBy != 0 )
+			break
+
+		if ( $obj_V2_lift.ControlledBy != 0 )
+			break
+
+		if (local.count < 1) {
+			$obj_V2_launcher TakeOver 0
+			local.switcher.mef_pressingbutton = 0
+
+			thread set_objectives
+			waitthread Check_End_Match
+			end
+		}
+		else if (local.count == local.waitSize)
+		{
+			local.switcher stopwatch (local.count * .1)
+		}
+
+		local.count = local.count - 1
+		wait 0.1
+	}
+
+	if (local.switcher != NULL)
+	{
+		local.switcher.mef_pressingbutton = 0
+		local.switcher stopwatch 0
+	}
+
+	if ( $V2_launcher.primed != 0 )
+		thread unprimeV2LaunchLever
+end
+
+primeV2LaunchLever:
+	$V2_launcher.primed = 2
+
+	$V2_launcher notsolid
+	$V2_launcher speed 10
+	$V2_launcher moveto $V2_launcher.end_origin
+	$V2_launcher solid
+	$V2_launcher waitmove
+	$V2_launcher playsound switchbox
+
+	for (local.i = 1; local.i <= $V2_alarm.size; local.i++)
+		$V2_alarm[local.i].makeSound = 1
+
+	$V2_launcher.primed = 1
+
+end
+
+unprimeV2LaunchLever:
+	if ( $obj_V2_launcher.ControlledBy == 0 )
+		end
+
+	for (local.i = 1; local.i <= $V2_alarm.size; local.i++)
+		$V2_alarm[local.i].makeSound = 0
+
+	$V2_launcher.primed = 2
+
+	$V2_launcher notsolid
+	$V2_launcher speed 10
+	$V2_launcher moveto $V2_launcher.start_origin
+	$V2_launcher solid
+	$V2_launcher waitmove
+	$V2_launcher playsound switchbox
+
+	$V2_launcher.primed = 0
+end
+
+V2AlarmLoop:
+	self.soundmaker = spawn "animate/military_radio.tik" "origin" self.origin "scale" "0.01"
+	self.soundmaker rendereffects "+dontdraw"
+
+	while (self)
+	{
+		while (self.makeSound != 1)
+			wait 0.1
+		self.soundmaker loopsound Battaglia_alarm
+		while (self.makeSound == 1)
+			wait 0.1
+		self.soundmaker stoploopsound
+	}
+end
+
+//----------------------------------------------------------
+//Destroy the allied spawner here
+//----------------------------------------------------------
+destroy_allies_spawner:
+
+	thread global/exploder.scr::explode 07
+
+	//Make sure we are the allies	
+	iprintln ( loc_convert_string "The Allied Camp has been destroyed!" )
+
+	//Take over the objective
+	$obj_allied_spawner TakeOver 0
+	waitthread global/libmef/tow.scr::spawner_destroyed allies
+	
+	iprintln ( loc_convert_string "The Allied Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Destroy the axis spawner here
+//----------------------------------------------------------
+destroy_axis_spawner:
+
+	thread global/exploder.scr::explode 08
+
+	iprintln ( loc_convert_string "The Axis Entrance has been destroyed!" )
+
+	$obj_axis_spawner TakeOver 1	
+	waitthread global/libmef/tow.scr::spawner_destroyed axis
+
+	iprintln ( loc_convert_string "The Axis Team can no longer respawn!" )
+
+	//See if someone won
+	thread Check_End_Match
+
+end
+
+//----------------------------------------------------------
+//Allies Won do their cinematic
+//----------------------------------------------------------
+
+destroy_v2:
+	local.lookat = spawn script_object
+	local.lookat.origin = $V2_rocket.origin
+
+	local.cameraat = ( -380 -129 2511 )
+
+	local.camera = spawn func_camera spawnflags 24
+	local.camera fov 80 2
+	local.camera speed 0.5
+	local.camera movetopos local.cameraat
+	local.camera lookat local.lookat
+	cuecamera local.camera
+
+	$V2_rocket notsolid
+
+	$V2_rocket glue local.lookat
+
+	local.fire = spawn models/emitters/cinematics_camExplosion.tik scale 16.0
+	local.fire.origin = $V2_rocket.origin
+	local.fire notsolid
+	local.fire anim start
+
+	wait 1.0
+
+	local.smoke = spawn models/emitters/tehao_thickSmoke.tik scale 16.0
+	local.smoke.origin = $V2_rocket.origin
+	local.smoke notsolid
+	local.smoke anim start
+
+	wait 3.0
+end
+
+
+//-----------------------------------------------
+DoFlyBy:
+//-----------------------------------------------
+
+	//spawn the allies	
+	thread global/dm_ai.scr::spawnset 87 allies
+
+	local.camera = spawn func_camera origin $p47_flyby.origin angles $p47_flyby.angles
+
+	local.camera fov 90
+	local.camera watch $p47_2
+	local.camera cut
+	cuecamera local.camera
+
+	$allies thread DoAlliedWin
+	waitthread GoPlanes
+	
+	end
+
+//-----------------------------------------------
+DoAlliedWin:
+//-----------------------------------------------
+
+	wait 8
+	
+	self nodamage	
+	self exec global/disable_ai.scr
+
+	local.rand = randomfloat 2
+	local.rand += 0.5
+
+	wait local.rand
+	self anim 00A001_victory
+
+	end
+
+
+//-----------------------------------------------
+GoPlanes:
+//-----------------------------------------------
+
+	$p47_1 rendereffects "+growradius"
+	$p47_2 rendereffects "+growradius"
+	$p47_3 rendereffects "+growradius"
+
+	$p47_1 svflags "+broadcast"
+	$p47_2 svflags "+broadcast"
+	$p47_3 svflags "+broadcast"
+
+	$p47_1 flypath $p47_1a 1500 1500 500
+	$p47_1 move
+	$p47_1 playsound e2l3_c47_flyby	
+
+	$p47_2 flypath $p47_2a 1500 1500 500
+	$p47_2 move
+	$p47_2 playsound e2l3_c47_flyby
+	
+	$p47_3 flypath $p47_3a 1500 1500 500
+	$p47_3 move
+	$p47_3 playsound e2l3_c47_flyby
+
+	wait 8
+
+	end
+
+//-----------------------------------------------
+AlliesWon:
+//-----------------------------------------------
+			
+	$player nodamage
+	$player hide
+	freezeplayer
+	drawhud 0
+	level.mef_hidehud = 1
+
+	forcemusic aux2 aux2
+
+	//ignore the clock for the movies
+	level ignoreclock 1
+	level.mef_gameover = 1
+
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin allies
+		end
+	}
+
+	thread setFog 2500 -256
+	
+	wait 1.0
+
+	waitthread DoFlyBy	
+
+	waitthread global/libmef/util.scr::do_teamwin allies
+
+	forcemusic aux3 aux3
+
+	wait 5
+
+end
+
+
+//-----------------------------------------------
+//Axis have won do their cinematic
+//-----------------------------------------------
+
+setFog local.distance local.bias:
+	$world farclipoverride local.distance
+	$world farplane local.distance
+	$world farplane_bias local.bias
+end
+
+//-----------------------------------------------
+launch_v2:
+//-----------------------------------------------
+
+	waitthread snapV2LiftToGround
+	
+	local.lookat = spawn script_object
+	local.lookat.origin = $V2_rocket.origin + ( 0 0 200 )
+
+	local.cameraat = ( -380 -129 2511 )
+
+	local.camera = spawn func_camera spawnflags 24
+	local.camera fov 80 2
+	local.camera speed 0.5
+	local.camera movetopos local.cameraat
+	local.camera watch local.lookat
+	local.camera cut
+	cuecamera local.camera
+	fadein 1.0 0 0 0 1
+
+	local.camera playsound Battaglia_Rocket
+
+	$V2_rocket notsolid
+
+	$V2_rocket glue local.lookat
+
+	local.fire = spawn models/emitters/cinematics_camExplosion.tik scale 16.0
+	local.fire.origin = $V2_rocket.origin
+	local.fire notsolid
+	local.fire anim start
+
+	wait 1.0
+
+	local.smoke = spawn models/emitters/tehao_thickSmoke.tik scale 16.0
+	local.smoke.origin = $V2_rocket.origin
+	local.smoke notsolid
+	local.smoke anim start
+
+	local.lookat.origin = local.lookat.origin + ( 0 0 -200 )
+
+	$V2_rocket glue local.lookat
+
+	local.smoke = spawn script_model model models/emitters/cinematics_smokeTrail.tik scale 6.0
+	local.smoke glue $V2_rocket
+
+	$V2_rocket rendereffects "+growradius"
+	$V2_rocket svflags "+broadcast"
+
+	thread propelRocket local.lookat
+end
+
+propelRocket local.lookat:
+	local.start = $V2_rocket.origin[2]
+	local.dist = 16.0
+	local.startFade = 0
+
+	
+	while (1)
+	{	
+		if (($V2_rocket.origin[2] - local.start) < 1400)
+		{
+			local.lookat time 0.5
+			local.lookat moveup local.dist
+			local.lookat waitmove
+			local.dist = local.dist + local.dist
+		}
+		else if ($V2_rocket.origin[2] < 8000)
+		{
+			if (local.startFade == 0)
+			{
+				fadeout 1.35 0 0 0 1
+				local.startFade = 1
+			}
+			local.lookat time 0.1
+			local.lookat moveup ( local.dist / 5.0 )
+			local.lookat waitmove
+		}
+		else 
+		{
+			$V2_rocket hide
+			end
+		}
+	}
+end
+
+//-----------------------------------------------
+AxisWon:
+//-----------------------------------------------
+
+	//Standard hide player stuff
+	$player nodamage
+	$player hide
+	freezeplayer
+	drawhud 0
+	level.mef_hidehud = 1
+
+	forcemusic aux4 aux4	
+
+	level ignoreclock 1
+	level.mef_gameover = 1
+	//if there is a bomb ticking stop it.
+	waitthread global/libmef/bomb.scr::StopBomb
+
+	// added by JP to so vote can be held to end the oppression of the cinematic
+	level.cinematic = getcvar(g_cinematics_off)
+	
+	if(level.cinematic == "1")
+	{
+		freezeplayer
+		waitthread global/libmef/util.scr::do_teamwin axis
+		end
+	}
+
+	fadeout 1.0 0 0 0 1
+	wait 1.0
+
+	thread setFog 2000 -256
+
+	waitthread launch_v2
+
+	wait 3
+
+	for (local.i = 1; local.i <= $V2_alarm.size; local.i++)
+		$V2_alarm[local.i].makeSound = 0
+
+	wait 2
+
+	forcemusic aux5 aux5
+
+	waitthread global/libmef/util.scr::do_teamwin axis
+
+	wait 5
+	
+	end
+

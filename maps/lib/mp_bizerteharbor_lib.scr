@@ -1,0 +1,593 @@
+// BIZERTE HARBOR
+
+// **********************************************************************
+// Extended-Gametype Mapscript Version 1.2.1 (05-14-05)
+// By Mark Follett (Mefy)
+// email: mef123@geocities.com
+// web: www.planetmedalofhonor.com/mefy
+// You are free to modify and redistribute as long as you keep these
+// credits.
+// **********************************************************************
+// Credits to Kaotik for base positions
+
+// -------------------------------------------------------------------------------------
+main:
+// -------------------------------------------------------------------------------------
+
+	// set scoreboard messages	
+	setcvar "g_obj_alliedtext1" "Bizerte"		
+	setcvar "g_obj_alliedtext2" ""
+	setcvar "g_obj_alliedtext3" ""
+	setcvar "g_obj_alliedtext4" ""
+	setcvar "g_obj_alliedtext5" ""
+	
+	setcvar "g_obj_axistext1" ""
+	setcvar "g_obj_axistext2" ""
+	setcvar "g_obj_axistext3" ""
+	setcvar "g_obj_axistext4" ""
+	setcvar "g_obj_axistext5" ""
+
+	setcvar "g_scoreboardpic" "mp_bizerteharbor_lib"	
+
+	switch (waitthread global/libmef/util.scr::get_gametype)
+	{
+		case "ctf":
+		case "ftctf":
+		case "dem":
+		case "ftdem":
+			waitthread setup_bases
+			break
+
+		case "lib":
+			thread liberationthread
+			break
+	}
+
+	//Call ai.scr for our movie actors	
+	exec global/dm_ai.scr	
+	exec global/DMprecache.scr
+	exec global/door_locked.scr
+	//level var init
+	level.bAxisSwitchDown	= 0
+	level.bAlliesSwitchDown	= 0
+
+	level.music="MP_BizerteHarbor"
+		
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	if (level.mef_gametype != "lib")
+	{
+		$alliesjail disablespawn
+		$axisjail disablespawn
+	}
+
+	//add in our clip brushes
+	local.clipbrush = spawn script_object
+	local.clipbrush.origin = ( -4756 3648 32 )
+	local.clipbrush setsize ( 0 0 0 ) ( 48 80 96 )
+	local.clipbrush solid
+
+	$world farplane 2200
+	$world farplane_color ".372 .329 .369"
+	$world farplane_bias 250
+	//*** Precache Dm Stuff
+	exec global/DMprecache.scr
+	exec global/door_locked.scr	
+
+	level.script = maps/lib/mp_bizerteharbor_lib.scr
+	exec global/ambient.scr mohdm1
+
+	//init our switches
+	thread InitSwitches
+
+	//init our gates
+	thread InitGates
+
+	// no network optimizations to reduce popping
+	setcvar	"g_netoptimize" "0"
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	$churchill notsolid
+	$churchill nodamage
+	$churchill setcollisionentity $churchill_collision
+
+	waitthread global/libmef/util.scr::waittill_roundstart
+
+	//Setup dock gate,shutter, and door triggers
+	thread InitTriggers
+
+end
+
+
+setup_bases:
+	// Base positions by Kaotik
+	waitthread global/libmef/bases.scr::addbasepair "-7232.86 524.42 58.55 0 SE Sector" "-4879.13 3156.54 32.13 180 NW Sector"
+	waitthread global/libmef/bases.scr::addbasepair "-5616.88 738.37 37.08 0 ENE Sector" "-6464.88 6122.14 41.61 0 WSW Sector"
+end
+
+
+liberationthread:
+	// Can specify different scoreboard messages for round based
+	// games here.
+	
+	///////////////////////
+	level waittill prespawn
+	///////////////////////
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	////////////////////
+	level waittill spawn
+	////////////////////
+
+	huddraw_color 101 1 1 1
+	huddraw_color 102 1 1 1
+
+	$alliesjail disablespawn
+	$axisjail disablespawn
+	$alliesnonjail enablespawn
+	$axisnonjail enablespawn
+
+	// set the parameters for this round based match
+	level.dmroundlimit = 5 // round time limit in minutes
+	level.clockside = kills // set to axis, allies, kills, or draw
+	
+	/////////////////////////
+	waitthread global/libmef/util.scr::waittill_roundstart
+	/////////////////////////
+
+	// obj#, status, text, location
+	// status -- 1) don't draw, 2) in progress, 3) completed		
+	addobjective 1 1 "Free teammates from the jail" $alliesjailswitch.origin		
+	addobjective 2 1 "Free teammates from the jail" $axisjailswitch.origin
+
+	setcurrentobjective 1 allies
+	setcurrentobjective 2 axis
+		
+	//Setup our jail break triggers
+	$axisjailtrigger thread AxisJailTrigger
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	thread global/lib_dm.scr::InitLiberationIcons
+
+	//disable invulnerable respawn. This could be used to keep jails open
+	setcvar "g_invulnoverride" "1"
+
+	wait 15
+
+	thread global/lib_dm.scr::playerwatch
+	
+	$alliesjail enablespawn
+	$axisjail enablespawn
+	$alliesnonjail disablespawn
+	$axisnonjail disablespawn
+end
+
+
+// -------------------------------------------------------------------------------------
+AxisJailTrigger:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	//set the player using the jail switch trigger
+	local.player = parm.other
+
+	//flip the switch first
+	if( local.player.dmteam == axis )
+	{
+		waitthread DoAxisSwitch
+
+		thread global/lib_dm.scr::axisjaildooruse local.player
+
+		wait 12
+
+		thread DoAxisSwitch
+	}
+
+	$axisjailtrigger thread AxisJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+AlliesJailTrigger:
+// -------------------------------------------------------------------------------------
+		
+	self waittill trigger
+
+	local.player = parm.other
+	
+	//flip the switch first
+	if( local.player.dmteam == allies )
+	{
+		waitthread DoAlliesSwitch
+
+		thread global/lib_dm.scr::alliesjaildooruse local.player
+
+		wait 12
+
+		waitthread DoAlliesSwitch
+	}
+
+	$alliesjailtrigger thread AlliesJailTrigger
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAxisSwitch:
+// -------------------------------------------------------------------------------------
+		
+	if( level.bAxisSwitchDown == 0 )
+	{			
+		$axisjailswitch anim turnon
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 1
+	}
+	else
+	{	
+		$axisjailswitch anim turnoff
+		$axisjailswitch waittill animdone
+		level.bAxisSwitchDown = 0
+	}	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+DoAlliesSwitch:
+// -------------------------------------------------------------------------------------
+
+	if( level.bAlliesSwitchDown == 0 )
+	{			
+		$alliesjailswitch anim turnon
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 1		
+	}
+	else
+	{			
+		$alliesjailswitch anim turnoff
+		$alliesjailswitch waittill animdone
+		level.bAlliesSwitchDown = 0		
+	}	
+
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+TriggerDockGate1:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerDockGate1
+	}
+
+	waitthread DoGate1Switch
+
+	if( $dockgate1.isOpen != 1 )
+	{
+		$dockgate1 open $docktrigger1_switch
+	}
+	else
+	{
+		$dockgate1 close $docktrigger1_switch
+	}
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+TriggerDockGate2:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerDockGate2
+	}
+
+	waitthread DoGate2Switch	
+	
+	if( $dockgate2.isOpen != 1 )
+	{			
+		$dockgate2 open $docktrigger2_switch
+	}
+	else
+	{			
+		$dockgate2 close $docktrigger2_switch
+	}
+	
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerDockGate3:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerDockGate3
+	}
+
+	waitthread DoGate3Switch	
+	
+	if( $dockgate3.isOpen != 1 )
+	{			
+		$dockgate3 open $docktrigger3_switch
+	}
+	else
+	{			
+		$dockgate3 close $docktrigger3_switch
+	}
+	
+
+
+	end
+
+
+
+// -------------------------------------------------------------------------------------
+DoGate1Switch:
+// -------------------------------------------------------------------------------------
+	
+	if( $docktrigger1switch.isOpen != 1 )
+	{	
+		$docktrigger1switch  notsolid
+		$docktrigger1switch  speed 40
+		$docktrigger1switch  moveto $docktrigger1switch.open_origin		
+		$docktrigger1switch  solid
+		$docktrigger1switch  waitmove
+		$docktrigger1switch  playsound switchbox
+		$docktrigger1switch.isOpen = 1		
+	}
+	else
+	{	
+		$docktrigger1switch  notsolid
+		$docktrigger1switch  speed 40
+		$docktrigger1switch  moveto $docktrigger1switch.closed_origin		
+		$docktrigger1switch  solid
+		$docktrigger1switch  waitmove		
+		$docktrigger1switch  playsound switchbox
+		$docktrigger1switch.isOpen = 0
+	}
+
+	thread TriggerDockGate1
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+DoGate2Switch:
+// -------------------------------------------------------------------------------------
+
+	if( $docktrigger2switch.isOpen != 1 )
+	{	
+		$docktrigger2switch  notsolid
+		$docktrigger2switch  speed 40
+		$docktrigger2switch  moveto $docktrigger2switch.open_origin		
+		$docktrigger2switch  solid
+		$docktrigger2switch  waitmove
+		$docktrigger2switch  playsound switchbox
+		$docktrigger2switch.isOpen = 1		
+	}
+	else
+	{	
+		$docktrigger2switch  notsolid
+		$docktrigger2switch  speed 40
+		$docktrigger2switch  moveto $docktrigger2switch.closed_origin		
+		$docktrigger2switch  solid
+		$docktrigger2switch  waitmove		
+		$docktrigger2switch  playsound switchbox
+		$docktrigger2switch.isOpen = 0
+	}
+
+
+	thread TriggerDockGate2
+
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+DoGate3Switch:
+// -------------------------------------------------------------------------------------
+
+	if( $docktrigger3switch.isOpen != 1 )
+	{	
+		$docktrigger3switch  notsolid
+		$docktrigger3switch  speed 40
+		$docktrigger3switch  moveto $docktrigger3switch.open_origin		
+		$docktrigger3switch  solid
+		$docktrigger3switch  waitmove
+		$docktrigger3switch  playsound switchbox
+		$docktrigger3switch.isOpen = 1		
+	}
+	else
+	{	
+		$docktrigger3switch  notsolid
+		$docktrigger3switch  speed 40
+		$docktrigger3switch  moveto $docktrigger3switch.closed_origin		
+		$docktrigger3switch  solid
+		$docktrigger3switch  waitmove		
+		$docktrigger3switch  playsound switchbox
+		$docktrigger3switch.isOpen = 0
+	}
+
+
+	thread TriggerDockGate3
+
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+TriggerShutter1:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter1
+	}
+
+	if( $shutter1[1].isOpen != 1 )
+	{			
+		$shutter1 open $shutter1_origin
+	}
+	else
+	{			
+		$shutter1 close
+	}
+
+	$shutter1trigger thread TriggerShutter1
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter2:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter2
+	}
+
+	if( $shutter2[1].isOpen != 1 )
+	{			
+		$shutter2 open $shutter2_origin
+	}
+	else
+	{			
+		$shutter2 close
+	}									   
+
+	$shutter2trigger thread TriggerShutter2
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter3:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter3
+	}
+
+	if( $shutter3[1].isOpen != 1 )
+	{			
+		$shutter3 open $shutter3_origin
+	}
+	else
+	{			
+		$shutter3 close
+	}
+
+	$shutter3trigger thread TriggerShutter3
+
+	end
+
+// -------------------------------------------------------------------------------------
+TriggerShutter4:
+// -------------------------------------------------------------------------------------
+
+	self waittill trigger
+	
+	if (parm.other.mef_spectator)
+	{
+		goto TriggerShutter4
+	}
+
+	if( $shutter4[1].isOpen != 1 )
+	{			
+		$shutter4 open $shutter4_origin
+	}
+	else
+	{			
+		$shutter4 close
+	}
+
+	$shutter4trigger thread TriggerShutter4
+
+	end
+
+
+
+// -------------------------------------------------------------------------------------
+InitSwitches:
+// -------------------------------------------------------------------------------------
+
+	$docktrigger1switch.isOpen = 0
+	$docktrigger1switch.open_origin = $docktrigger1_downorigin
+	$docktrigger1switch.closed_origin = $docktrigger1_uporigin
+
+	$docktrigger2switch.isOpen = 0
+	$docktrigger2switch.open_origin = $docktrigger2_downorigin
+	$docktrigger2switch.closed_origin = $docktrigger2_uporigin
+
+	$docktrigger3switch.isOpen = 0
+	$docktrigger3switch.open_origin = $docktrigger3_downorigin
+	$docktrigger3switch.closed_origin = $docktrigger3_uporigin
+
+	$alliesjailswitch notsolid
+	$axisjailswitch notsolid
+
+
+	end
+
+// -------------------------------------------------------------------------------------
+InitTriggers:
+// -------------------------------------------------------------------------------------
+
+	$docktrigger1 thread TriggerDockGate1
+	$docktrigger2 thread TriggerDockGate2
+	$docktrigger3 thread TriggerDockGate3
+	$shutter1trigger thread TriggerShutter1
+	$shutter2trigger thread TriggerShutter2
+	$shutter3trigger thread TriggerShutter3
+	$shutter4trigger thread TriggerShutter4
+
+	end
+
+
+// -------------------------------------------------------------------------------------
+InitGates:
+// -------------------------------------------------------------------------------------
+
+	$dockgate1 sound_open_start door_metal_open_move2
+	$dockgate1 sound_open_end door_metal_close_move2
+	$dockgate1 sound_close_start door_metal_open_move2
+	$dockgate1 sound_close_end door_metal_close_move2
+
+	$dockgate2 sound_open_start door_metal_open_move2
+	$dockgate2 sound_open_end door_metal_close_move2
+	$dockgate2 sound_close_start door_metal_open_move2
+	$dockgate2 sound_close_end door_metal_close_move2
+
+	$dockgate3 sound_open_start door_metal_open_move2
+	$dockgate3 sound_open_end door_metal_close_move2
+	$dockgate3 sound_close_start door_metal_open_move2
+	$dockgate3 sound_close_end door_metal_close_move2
+
+	end
+

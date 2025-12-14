@@ -1,6 +1,6 @@
 
 // **********************************************************************
-// Revised Bomb Code Version 1.1.4 (11-15-04)
+// Revised Bomb Code Version 1.2.2 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -106,7 +106,7 @@ bomb_thread:
 	self.timeleft = 0.0
 	self.exploded = 0
 
-	if (!self.custom && self.target != NIL && self.target != NULL && self.target != "")
+	if (!self.custom && self.target != NIL && self.target != NULL && self.target != "" && $(self.target) != NULL)
 	{
 		self.target.collisionent = self.target.target
 		self.target notsolid
@@ -229,7 +229,7 @@ end 0
 bomb_set_event local.bomb local.player:
 	level.planter = local.player
 
-	waitthread bomb_message local.bomb "planted" local.player.dmteam
+	waitthread bomb_message local.bomb "planted" local.player
 
 	if (local.bomb.planting_team == "allies")
 	{
@@ -253,7 +253,7 @@ end
 bomb_defused_event local.bomb local.player:
 	level.planter = NULL
 	
-	waitthread bomb_message local.bomb "defused" local.player.dmteam
+	waitthread bomb_message local.bomb "defused" local.player
 
 	if (local.bomb.defusing_team == "allies")
 	{
@@ -274,18 +274,37 @@ bomb_defused_event local.bomb local.player:
 end
 
 
-bomb_message local.bomb local.action local.team:
-	if (local.team == "allies")
+bomb_message local.bomb local.action local.player:
+	local.name = waitthread global/libmef/util.scr::get_player_name local.player
+	if (local.name != NIL)
 	{
-		local.str = "The Allies have " + local.action + " a Bomb!"
-	} else if (local.team == "axis")
-	{
-		local.str = "The Axis have " + local.action + " a Bomb!"
+		local.str = level.mef_team[local.player.dmteam].desc + " player (" + local.name + ") "
+
+		if (level.mef_settings["logevents"])
+		{
+			if (local.action == "planted")
+			{
+				local.logstring = "PLANT"
+			} else
+			{
+				local.logstring = "DEFUSE"
+			}
+			
+			println ("MEF " + local.logstring + " " + local.player.dmteam + " " + (waitthread global/libmef/util.scr::escape_string local.name " " "&"))
+		}
 	} else
 	{
-		local.str = "A Bomb has been " + local.action + "!"
+		if (local.team == "allies")
+		{
+			local.str = "The Allies have "
+		} else
+		{
+			local.str = "The Axis have "
+		}
 	}
 
+	local.str += (local.action + " a Bomb!")
+	
 	if (local.bomb.desc != NIL)
 	{
 		local.str += (" [" + local.bomb.desc + "]")
@@ -368,7 +387,7 @@ bomb_explode:
 		self waitthread blowup_custom_bomb
 	} else
 	{
-		if (self.target != NIL && self.target != NULL && self.target != "")
+		if (self.target != NIL && self.target != NULL && self.target != "" && $(self.target) != NULL)
 		{
 			self.target thread blow_up
 			waitframe
@@ -384,6 +403,7 @@ bomb_explode:
 	}
 
 	self hide
+	self notsolid
 	
 	self.live = 0
 	level.targets_destroyed = level.targets_destroyed + 1
@@ -393,11 +413,16 @@ bomb_explode:
 		waitthread self.explode_thread
 	}
 
+	if( self.objCvar != NIL && self.objCvar != NULL )
+	{
+		setcvar self.objCvar ""
+	}
+
 	// we delay the decrementing of	level.bombs_planted so that the script has
 	// time to determin the winner before the timelimit gets checked and hit
 	wait 0.5
 	
-	if (level.bomb_set > 0)
+	if (level.bomb_set != NIL && level.bomb_set > 0)
 	{
 		level.bomb_set --
 	}
@@ -419,6 +444,7 @@ spawn_fx local.fx:
 	local.temp = spawn script_model model local.fx
 	local.temp.origin = self.origin
 	local.temp anim start
+	local.temp notsolid
 	wait 5
 	local.temp remove
 end
@@ -454,7 +480,7 @@ blow_up:
 		local.damaged = self thread spawn_damaged self.destroyed_model
 	}
 	
-	if( self.target != NIL && self.target != NULL && self.target != "")
+	if( self.target != NIL && self.target != NULL && self.target != "" && $(self.target) != NULL)
 	{
 		self.target thread blow_up
 	}

@@ -3,7 +3,7 @@
 // SCRIPTING: POWZER
 
 // **********************************************************************
-// Extended-Gametype Mapscript Version 1.1.1 (11-15-04)
+// Extended-Gametype Mapscript Version 1.2.2 (05-14-05)
 // By Mark Follett (Mefy)
 // email: mef123@geocities.com
 // web: www.planetmedalofhonor.com/mefy
@@ -21,39 +21,17 @@ main:
 
 	setcvar "g_scoreboardpic" "objdm2"
 
-	level.mef_mapname = "obj_team2"
-	level.mef_maptype = "obj"
-	level.mef_supportedgametypes = "ffa"::"tdm"::"rbm"::"obj"::"ft"::"ctf"::"ftobj"::"ftctf"::"dem"::"ftdem"
-	level.mef_defaultgametype = "ftobj"
-
 	switch (waitthread global/libmef/util.scr::get_gametype)
 	{
 		case "ctf":
 		case "ftctf":
-			waitthread setup_bases
-			thread global/libmef/ctf.scr::ctf_begin
-			break
-
 		case "dem":
 		case "ftdem":
 			waitthread setup_bases
-			thread global/libmef/dem.scr::dem_begin
-			break
-
-		case "ft":
-			thread global/libmef/ft.scr::ft_begin
-			break
-
-		case "ftobj":
-			thread global/libmef/ft.scr::ft_begin
-			thread objectivethread
-			break
-
-		case "rbm":
-			thread roundbasedthread
 			break
 
 		case "obj":
+		case "ftobj":
 			thread objectivethread
 			break
 	}
@@ -85,32 +63,14 @@ main:
 	//thread global/barrel.scr::explosive_barrel
 
 	level waittill spawn
-	$world farclipoverride -1
-
-	if (!level.mef_devmode && level.roundbased)
+	if (level.mef_baseversion == "sh" || level.mef_baseversion == "bt")
 	{
-		level waittill roundstart
+		$world commanddelay 0 farclipoverride -1
 	}
 
+	waitthread global/libmef/util.scr::waittill_roundstart
+
 	thread flyby	
-end
-
-
-roundbasedthread:
-
-	// Can specify different scoreboard messages for round based games here.
-
-	level waitTill prespawn
-
-	level waittill spawn
-
-	// set the parameters for this round based match
-	level.dmrespawning = 0 // 1 or 0
-	level.dmroundlimit = 5 // round time limit in minutes
-	level.clockside = kills // set to axis, allies, kills, or draw
-
-	level waittill roundstart
-
 end
 
 
@@ -155,8 +115,12 @@ setup_bases:
 	waitthread global/libmef/bases.scr::addbase axis "2304 2690 50 -90 Control Room" radio
 	waitthread global/libmef/bases.scr::addbase allies "-386 232 -447.88 90 Right Corridor" tntcrate
 	waitthread global/libmef/bases.scr::addbase allies "-598 1848 -397.88 0 Left Corridor" radiostation
-	waitthread global/libmef/bases.scr::addbasepair "169 250 -319.88 -30 Allied Cable Spool" "187 2005 -402.88 180 Axis Ammo Crate" cablespool indycrate
-	waitthread global/libmef/bases.scr::addbasepair "187 2005 -402.88 180 Allied Ammo Crate" "169 250 -319.88 -30 Axis Cable Spool" indycrate cablespool
+
+	if (level.mef_gametype == "ctf" || level.mef_gametype == "ftctf")
+	{
+		waitthread global/libmef/bases.scr::addbasepair "169 250 -319.88 -30 Vent Room Cable Spool" "187 2005 -402.88 180 Garage Ammo Crate" cablespool indycrate
+		waitthread global/libmef/bases.scr::addbasepair "187 2005 -402.88 180 Garage Ammo Crate" "169 250 -319.88 -30 Vent Room Cable Spool" indycrate cablespool
+	}
 end
 
 
@@ -188,10 +152,7 @@ setcvar "g_obj_axistext3" ""
 	level.dmroundlimit = 5 // round time limit in minutes
 	level.clockside = axis // set to axis, allies, kills, or draw
 
-	if (!level.mef_devmode)
-	{
-		level waittill roundstart
-	}
+	waitthread global/libmef/util.scr::waittill_roundstart
 	
 		$v2_explode thread global/libmef/bomb.scr::bomb_thinker
 		$ctrlroom_explode thread global/libmef/bomb.scr::bomb_thinker
@@ -208,13 +169,7 @@ allies_win_bomb:
 	while(level.targets_destroyed < level.targets_to_destroy)
 		waitframe
 
-	if (level.mef_gametype == "ftobj")
-	{
-		waitthread global/libmef/util.scr::do_teamwin allies
-	} else
-	{
-		teamwin allies
-	}
+	waitthread global/libmef/util.scr::do_teamwin allies
 end
 
 //*** --------------------------------------------
