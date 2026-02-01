@@ -169,7 +169,7 @@ ft_begin:
 
 	waitthread global/libmef/util.scr::waittill_roundstart
 
-	waitthread global/libmef/hud.scr::init_suddendeath_hud
+	//waitthread global/libmef/hud.scr::init_suddendeath_hud
 
 	local.sdmins = 0
 	local.autonuke = 0
@@ -1092,7 +1092,7 @@ laser_thread local.player:
 			local.canuse = 1
 		}
 		
-		if (local.player.useheld && local.canuse && !local.player.fireheld && local.player.mef_pstate == "PSTATE_ALIVE" && !local.player.mef_pressingbutton)
+		if ((isBot local.player) && local.player.botmeltgun || local.player.useheld && local.canuse && !local.player.fireheld && local.player.mef_pstate == "PSTATE_ALIVE" && !local.player.mef_pressingbutton)
 		{
 			if (local.useheldtime == NIL)
 			{
@@ -1139,6 +1139,9 @@ laser_thread local.player:
 					local.canuse = 0
 				}
 				local.player stoploopsound
+				if ((isBot local.player)) {
+					local.player.botismelting = 0
+				}				
 				local.ent lightOff
 				local.ent deactivate
 				local.ent.laseron = 0
@@ -1162,6 +1165,9 @@ laser_thread local.player:
 			if (local.ent.laseron)
 			{
 				local.player loopsound local.meltingsound local.soundvol
+				if ((isBot local.player)) {
+					local.player.botismelting = 1
+				}			
 			}
 		} else if (!local.ent.hitbody && local.hitbody)
 		{
@@ -1173,6 +1179,9 @@ laser_thread local.player:
 			if (local.ent.laseron)
 			{
 				local.player loopsound local.lasersound local.soundvol
+				if ((isBot local.player)) {
+					local.player.botismelting = 0
+				}			
 			} else
 			{
 				local.ent lightOff

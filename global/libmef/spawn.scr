@@ -328,6 +328,8 @@ end
 
 
 spawnblock_begin:
+	exec global/libmef/bot.scr
+
 	waitthread select_spawnregions
 
 	if (level.mef_alliedspawnregion != NIL)

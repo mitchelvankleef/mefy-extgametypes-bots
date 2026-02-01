@@ -1,0 +1,87 @@
+main:
+	event_subscribe "player_spawned" event_player_spawned
+	event_subscribe "player_killed" event_player_removed
+	event_subscribe "player_disconnecting" event_player_removed
+end
+
+event_player_spawned:
+	if (!(isBot self) || self.mef_gstate == "GSTATE_DEAD") {
+		end
+	}
+	
+	thread bot_loop self
+end
+
+event_player_removed:
+	if (!(isBot self)) {
+		end
+	}
+	
+	self.botmeltgun = 0
+	self freezecontrols 0
+	self setspeed 1
+end
+
+bot_loop local.bot:
+	while (local.bot.mef_gstate != "GSTATE_DEAD") {
+		// Check if bot collides with frozen body of teammate
+		local.frozenbodies = level.ft_frozenbodies[local.bot.dmteam]
+		
+		if (local.frozenbodies != NIL && !level.mef_suddendeath) {		
+			for (local.elem = (waitthread global/libmef/ft.scr::get_first_frozen_body local.bot.dmteam); local.elem != NIL; local.elem = local.elem.nextbody)
+			{				
+				if (local.elem != NIL && local.elem.melttrigger != NIL && local.bot cansee local.elem 360 local.elem.melttrigger.meltdist && (isonground local.bot)) {
+					local.bot setspeed 0
+				} else if (local.elem != NIL && local.elem.melttrigger != NIL && local.bot cansee local.elem 360 99999 && !(waitthread can_see_enemies local.bot) && (isonground local.bot)) {
+					wait 0.1
+					local.bot setspeed 0
+					wait 1
+					local.meltattempttime = 0
+					while (local.elem != NIL && local.elem.melttrigger != NIL && local.bot.mef_gstate != "GSTATE_DEAD" && !level.mef_suddendeath && !(thread should_give_up_melt local.bot local.meltattempttime)) {
+						local.meltangles = angles_pointat local.elem.melttrigger local.elem.melttrigger local.bot
+						local.bot.viewangles = ( local.meltangles[0] local.meltangles[1] local.meltangles[2] )
+						local.bot.angles = ( 0 local.meltangles[1] ( local.meltangles[2] ) )
+						local.bot freezecontrols 1
+						local.bot.botmeltgun = 1
+						local.meltattempttime = local.meltattempttime + 0.05
+						waitframe
+					}
+					local.bot freezecontrols 0
+					local.bot setspeed 1
+					wait 1
+				} else {
+					local.bot freezecontrols 0
+					local.bot setspeed 1
+					local.bot.botmeltgun = 0
+				}
+			}
+		} else {
+			local.bot freezecontrols 0
+			local.bot setspeed 1
+			local.bot.botmeltgun = 0
+		}
+		
+		local.bot.botmeltgun = 0
+
+		wait 0.1
+	}
+end
+
+can_see_enemies local.bot:
+	local.enemiesinsight = 0
+	local.selfdmteam = local.bot.dmteam
+
+	for (local.i = 1; local.i < $player.size; local.i++) {
+		if ($player[local.i].dmteam != local.selfdmteam) {
+			if (local.bot cansee $player[local.i] 180 99999) {
+				local.enemiesinsight = 1
+			}
+		}
+	}
+end ( local.enemiesinsight )
+
+should_give_up_melt local.bot local.meltattempttime:
+	if (local.meltattempttime > 3 && !local.bot.botismelting) {
+		end 1
+	}
+end 0
